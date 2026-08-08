@@ -1,17 +1,53 @@
-# kitapp_reader2
+# Kitapp
 
-A new Flutter project.
+Кыргызча электрондук китеп дүкөнүнүн MVP-версиясы: Flutter веб-тиркеме,
+NestJS API жана кыргыз тилиндеги веб-админка.
 
-## Getting Started
+## Локалдык иштетүү
 
-This project is a starting point for a Flutter application.
+Талаптар: Node.js, Flutter, Docker Desktop.
 
-A few resources to get you started if this is your first Flutter project:
+```bash
+npm install
+docker compose up -d
+cp server/.env.example server/.env
+npm --workspace server run db:migrate
+npm --workspace server run db:seed
+npm run dev:server
+```
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+Экинчи терминалда админканы иштетиңиз:
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```bash
+npm run dev:admin
+```
+
+- Админка: http://127.0.0.1:5173
+- API: http://127.0.0.1:3000/api
+- MinIO: http://127.0.0.1:9001
+- PostgreSQL: `127.0.0.1:55432`
+- Админ: `admin@kitapp.kg` / `Kitapp123!`
+- Локалдык SMS-код: `111111`
+
+Flutter веб-тиркемесин өзүнчө иштетүү:
+
+```bash
+flutter run -d web-server --web-port 8083
+```
+
+## MVP чектөөлөрү
+
+- Колдонуучу телефон номери аркылуу гана кирет.
+- Интерфейс кыргыз тилинде.
+- Офлайн режим жана түзмөктөр аралык синхрондоштуруу жок.
+- Админ-панель веб үчүн гана жасалган.
+- Сатуу отчёту мезгил боюнча китепти, авторду, санын жана кирешени көрсөтөт.
+
+## Текшерүүлөр
+
+```bash
+npm run check
+node tool/qa_admin_api.cjs
+flutter analyze
+flutter test
+```
