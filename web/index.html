@@ -31,6 +31,45 @@
 
   <title>kitapp_reader2</title>
   <link rel="manifest" href="manifest.json">
+  <style>
+    /* Readium's bundled demo CSS reserves 96px for controls that Kitapp
+       renders in Flutter. Keep the embedded publication flush with its host. */
+    html body #wrapper,
+    html body #container,
+    html body #container iframe {
+      height: 100% !important;
+      min-height: 100% !important;
+      pointer-events: none;
+    }
+    flt-semantics:not([role]):not([flt-tappable]) {
+      pointer-events: none !important;
+    }
+  </style>
+  <script src="readiumReader.js" defer></script>
+  <script>
+    (() => {
+      let pointerStart = null;
+
+      window.addEventListener('pointerdown', (event) => {
+        if (!document.querySelector('#container iframe')) return;
+        pointerStart = { x: event.clientX, y: event.clientY };
+      }, true);
+
+      window.addEventListener('pointerup', (event) => {
+        if (!pointerStart) return;
+        const dx = event.clientX - pointerStart.x;
+        const dy = event.clientY - pointerStart.y;
+        pointerStart = null;
+
+        if (Math.abs(dx) <= 50 || Math.abs(dx) <= Math.abs(dy)) return;
+        if (dx < 0) {
+          window.kitappSwipeForward?.();
+        } else {
+          window.kitappSwipeBackward?.();
+        }
+      }, true);
+    })();
+  </script>
 </head>
 <body>
   <!--

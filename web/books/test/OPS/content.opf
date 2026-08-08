@@ -1,0 +1,208 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="bookid" xmlns:opf="http://www.idpf.org/2007/opf" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<metadata>
+<dc:title>Игра престолов</dc:title>
+<dc:creator>Джордж Мартин</dc:creator>
+<meta name="FB2.book-info.translator" content="Юрий Ростиславович Соколов"/>
+<dc:language>ru</dc:language>
+<dc:description>Джордж Мартин. Писатель, очень рано и легко добившийся огромного успеха. Начиная с рассказов и повестей, представлявших собой смелую смесь научной фантастики и «ужасов» (за произведения в этом жанре удостоен двух «Хьюго» и двух «Небьюла»), работал и в «классической» научной фантастике, но впоследствии стал подлинным мастером фэнтези, которого критики ставят наравне с Д.Р.Р.Толкином и Р.Джорданом. Перед вами — знаменитая эпопея «Песнь льда и огня». Эпическая, чеканная сага о мире Семи Королевств. О мире суровых земель вечного холода и радостных земель вечного лета. О мире опасных приключений, тончайших политических интриг и великих деяний. О мире лордов и героев, драконов, воинов и магов, чернокнижников и убийц — всех, кого свела Судьба во исполнение пророчества… </dc:description>
+<meta name="FB2.book-info.date" content="1996"/>
+<dc:date>1996</dc:date>
+<meta name="FB2.book-info.sequence" content="Песнь льда и пламени (A Song of Ice and Fire); number=1"/>
+<meta name="FB2.document-info.program-used" content="FictionBook Editor Release 2.6.6"/>
+<meta name="FB2.document-info.src-url" content="http://www.litres.ru/pages/biblio_book/?art=248812"/>
+<meta name="FB2.document-info.src-ocr" content="Текст предоставлен издательством"/>
+<meta name="FB2.document-info.history" content="v 1.0 — создание fb2 — (MCat78) v 1.1 — вычитка, сличение имен собственных между книгами серии, генеральная уборка — ccaid v 1.3 — устранение обнаруженных ошибок распознавания — A5 (29.11.2023) "/>
+<meta name="FB2.document-info.id" content="7DDD9D15-CD5A-4672-AF1A-23BF78226F0C"/>
+<meta name="FB2.document-info.version" content="1.3"/>
+<meta name="FB2.document-info.date" content="1996"/>
+<dc:identifier id="bookid">urn:uuid:7ddd9d15-cd5a-4672-af1a-23bf78226f0c</dc:identifier>
+<dc:publisher>АСТ, АСТ Москва, Хранитель</dc:publisher>
+<meta name="FB2.publish-info.book-name" content="Игра престолов : [фантаст. роман] / Джордж Р. Р. Мартин"/>
+<meta name="FB2.publish-info.city" content="Москва"/>
+<meta name="FB2.publish-info.year" content="2012"/>
+<dc:identifier id="bookid1">isbn:978-5-271-34087-1</dc:identifier>
+<meta name="FB2EPUB.version" content="0.5.0"/>
+<meta name="FB2EPUB.conversionDate" content="2023-11-30T03:50:29+00:00"/>
+</metadata>
+<manifest>
+<item href="ch1-15.xhtml" media-type="application/xhtml+xml" id="id1"/>
+<item href="fonts/Times-New-Roman-400-Italic-7ddd9d15-cd5a-4672-af1a-23bf78226f0c.otf" media-type="application/vnd.ms-opentype" id="id2"/>
+<item href="ch1-35.xhtml" media-type="application/xhtml+xml" id="id3"/>
+<item href="ch1.xhtml" media-type="application/xhtml+xml" id="id4"/>
+<item href="ch1-9.xhtml" media-type="application/xhtml+xml" id="id5"/>
+<item href="ch1-54.xhtml" media-type="application/xhtml+xml" id="id6"/>
+<item href="images/i_004.png" media-type="image/png" id="id7"/>
+<item href="ch1-74.xhtml" media-type="application/xhtml+xml" id="id8"/>
+<item href="images/i_014.png" media-type="image/png" id="id9"/>
+<item href="ch1-22.xhtml" media-type="application/xhtml+xml" id="id10"/>
+<item href="ch1-47.xhtml" media-type="application/xhtml+xml" id="id11"/>
+<item href="images/i_009.png" media-type="image/png" id="id12"/>
+<item href="ch1-41.xhtml" media-type="application/xhtml+xml" id="id13"/>
+<item href="ch1-61.xhtml" media-type="application/xhtml+xml" id="id14"/>
+<item href="fonts/Times-New-Roman-400-7ddd9d15-cd5a-4672-af1a-23bf78226f0c.otf" media-type="application/vnd.ms-opentype" id="id15"/>
+<item href="ch1-34.xhtml" media-type="application/xhtml+xml" id="id16"/>
+<item href="ch1-59.xhtml" media-type="application/xhtml+xml" id="id17"/>
+<item href="ch1-3.xhtml" media-type="application/xhtml+xml" id="id18"/>
+<item href="fonts/Times-New-Roman-700-7ddd9d15-cd5a-4672-af1a-23bf78226f0c.otf" media-type="application/vnd.ms-opentype" id="id19"/>
+<item href="ch1-73.xhtml" media-type="application/xhtml+xml" id="id20"/>
+<item href="ch1-27.xhtml" media-type="application/xhtml+xml" id="id21"/>
+<item href="ch1-21.xhtml" media-type="application/xhtml+xml" id="id22"/>
+<item href="ch1-46.xhtml" media-type="application/xhtml+xml" id="id23"/>
+<item href="ch1-66.xhtml" media-type="application/xhtml+xml" id="id24"/>
+<item href="images/i_003.png" media-type="image/png" id="id25"/>
+<item href="ch1-60.xhtml" media-type="application/xhtml+xml" id="id26"/>
+<item href="ch1-14.xhtml" media-type="application/xhtml+xml" id="id27"/>
+<item href="ch1-39.xhtml" media-type="application/xhtml+xml" id="id28"/>
+<item href="images/i_013.png" media-type="image/png" id="id29"/>
+<item href="ch1-8.xhtml" media-type="application/xhtml+xml" id="id30"/>
+<item href="ch1-33.xhtml" media-type="application/xhtml+xml" id="id31"/>
+<item href="ch1-53.xhtml" media-type="application/xhtml+xml" id="id32"/>
+<item href="images/i_008.png" media-type="image/png" id="id33"/>
+<item href="ch1-2.xhtml" media-type="application/xhtml+xml" id="id34"/>
+<item href="ch1-26.xhtml" media-type="application/xhtml+xml" id="id35"/>
+<item href="toc.ncx" media-type="application/x-dtbncx+xml" id="id36"/>
+<item href="ch1-20.xhtml" media-type="application/xhtml+xml" id="id37"/>
+<item href="ch1-40.xhtml" media-type="application/xhtml+xml" id="id38"/>
+<item href="ch1-65.xhtml" media-type="application/xhtml+xml" id="id39"/>
+<item href="ch1-19.xhtml" media-type="application/xhtml+xml" id="id40"/>
+<item href="ch1-13.xhtml" media-type="application/xhtml+xml" id="id41"/>
+<item href="ch1-38.xhtml" media-type="application/xhtml+xml" id="id42"/>
+<item href="ch1-58.xhtml" media-type="application/xhtml+xml" id="id43"/>
+<item href="ch1-7.xhtml" media-type="application/xhtml+xml" id="id44"/>
+<item href="images/i_002.png" media-type="image/png" id="id45"/>
+<item href="ch1-52.xhtml" media-type="application/xhtml+xml" id="id46"/>
+<item href="ch1-72.xhtml" media-type="application/xhtml+xml" id="id47"/>
+<item href="ch1-25.xhtml" media-type="application/xhtml+xml" id="id48"/>
+<item href="images/i_012.png" media-type="image/png" id="id49"/>
+<item href="ch1-45.xhtml" media-type="application/xhtml+xml" id="id50"/>
+<item href="images/i_007.png" media-type="image/png" id="id51"/>
+<item href="style.css" media-type="text/css" id="id52"/>
+<item href="ch1-18.xhtml" media-type="application/xhtml+xml" id="id53"/>
+<item href="ch1-12.xhtml" media-type="application/xhtml+xml" id="id54"/>
+<item href="ch1-32.xhtml" media-type="application/xhtml+xml" id="id55"/>
+<item href="ch1-57.xhtml" media-type="application/xhtml+xml" id="id56"/>
+<item href="ch1-6.xhtml" media-type="application/xhtml+xml" id="id57"/>
+<item href="ch1-1.xhtml" media-type="application/xhtml+xml" id="id58"/>
+<item href="ch1-71.xhtml" media-type="application/xhtml+xml" id="id59"/>
+<item href="ch1-44.xhtml" media-type="application/xhtml+xml" id="id60"/>
+<item href="ch1-69.xhtml" media-type="application/xhtml+xml" id="id61"/>
+<item href="ch1-64.xhtml" media-type="application/xhtml+xml" id="id62"/>
+<item href="images/i_001.png" media-type="image/png" id="id63"/>
+<item href="ch1-17.xhtml" media-type="application/xhtml+xml" id="id64"/>
+<item href="ch1-37.xhtml" media-type="application/xhtml+xml" id="id65"/>
+<item href="images/i_011.png" media-type="image/png" id="id66"/>
+<item href="ch1-31.xhtml" media-type="application/xhtml+xml" id="id67"/>
+<item href="fonts/Times-New-Roman-700-Italic-7ddd9d15-cd5a-4672-af1a-23bf78226f0c.otf" media-type="application/vnd.ms-opentype" id="id68"/>
+<item href="images/i_006.png" media-type="image/png" id="id69"/>
+<item href="ch1-51.xhtml" media-type="application/xhtml+xml" id="id70"/>
+<item href="ch1-76.xhtml" media-type="application/xhtml+xml" id="id71"/>
+<item href="ch1-70.xhtml" media-type="application/xhtml+xml" id="id72"/>
+<item href="ch1-24.xhtml" media-type="application/xhtml+xml" id="id73"/>
+<item href="ch1-49.xhtml" media-type="application/xhtml+xml" id="id74"/>
+<item href="ch1-63.xhtml" media-type="application/xhtml+xml" id="id75"/>
+<item href="ch1-11.xhtml" media-type="application/xhtml+xml" id="id76"/>
+<item href="ch1-36.xhtml" media-type="application/xhtml+xml" id="id77"/>
+<item href="ch1-56.xhtml" media-type="application/xhtml+xml" id="id78"/>
+<item href="ch1-5.xhtml" media-type="application/xhtml+xml" id="id79"/>
+<item href="ch1-50.xhtml" media-type="application/xhtml+xml" id="id80"/>
+<item href="ch1-75.xhtml" media-type="application/xhtml+xml" id="id81"/>
+<item href="ch1-29.xhtml" media-type="application/xhtml+xml" id="id82"/>
+<item href="ch1-23.xhtml" media-type="application/xhtml+xml" id="id83"/>
+<item href="images/i_010.png" media-type="image/png" id="id84"/>
+<item href="ch1-43.xhtml" media-type="application/xhtml+xml" id="id85"/>
+<item href="ch1-68.xhtml" media-type="application/xhtml+xml" id="id86"/>
+<item href="images/i_005.png" media-type="image/png" id="id87"/>
+<item href="ch1-62.xhtml" media-type="application/xhtml+xml" id="id88"/>
+<item href="ch1-16.xhtml" media-type="application/xhtml+xml" id="id89"/>
+<item href="ch2.xhtml" media-type="application/xhtml+xml" id="id90"/>
+<item href="ch1-10.xhtml" media-type="application/xhtml+xml" id="id91"/>
+<item href="ch1-30.xhtml" media-type="application/xhtml+xml" id="id92"/>
+<item href="ch1-55.xhtml" media-type="application/xhtml+xml" id="id93"/>
+<item href="ch1-4.xhtml" media-type="application/xhtml+xml" id="id94"/>
+<item href="ch1-28.xhtml" media-type="application/xhtml+xml" id="id95"/>
+<item href="ch1-48.xhtml" media-type="application/xhtml+xml" id="id96"/>
+<item href="ch1-42.xhtml" media-type="application/xhtml+xml" id="id97"/>
+<item href="ch1-67.xhtml" media-type="application/xhtml+xml" id="id98"/>
+</manifest>
+<spine toc="id36">
+<itemref idref="id4"/>
+<itemref idref="id58"/>
+<itemref idref="id34"/>
+<itemref idref="id18"/>
+<itemref idref="id94"/>
+<itemref idref="id79"/>
+<itemref idref="id57"/>
+<itemref idref="id44"/>
+<itemref idref="id30"/>
+<itemref idref="id5"/>
+<itemref idref="id91"/>
+<itemref idref="id76"/>
+<itemref idref="id54"/>
+<itemref idref="id41"/>
+<itemref idref="id27"/>
+<itemref idref="id1"/>
+<itemref idref="id89"/>
+<itemref idref="id64"/>
+<itemref idref="id53"/>
+<itemref idref="id40"/>
+<itemref idref="id37"/>
+<itemref idref="id22"/>
+<itemref idref="id10"/>
+<itemref idref="id83"/>
+<itemref idref="id73"/>
+<itemref idref="id48"/>
+<itemref idref="id35"/>
+<itemref idref="id21"/>
+<itemref idref="id95"/>
+<itemref idref="id82"/>
+<itemref idref="id92"/>
+<itemref idref="id67"/>
+<itemref idref="id55"/>
+<itemref idref="id31"/>
+<itemref idref="id16"/>
+<itemref idref="id3"/>
+<itemref idref="id77"/>
+<itemref idref="id65"/>
+<itemref idref="id42"/>
+<itemref idref="id28"/>
+<itemref idref="id38"/>
+<itemref idref="id13"/>
+<itemref idref="id97"/>
+<itemref idref="id85"/>
+<itemref idref="id60"/>
+<itemref idref="id50"/>
+<itemref idref="id23"/>
+<itemref idref="id11"/>
+<itemref idref="id96"/>
+<itemref idref="id74"/>
+<itemref idref="id80"/>
+<itemref idref="id70"/>
+<itemref idref="id46"/>
+<itemref idref="id32"/>
+<itemref idref="id6"/>
+<itemref idref="id93"/>
+<itemref idref="id78"/>
+<itemref idref="id56"/>
+<itemref idref="id43"/>
+<itemref idref="id17"/>
+<itemref idref="id26"/>
+<itemref idref="id14"/>
+<itemref idref="id88"/>
+<itemref idref="id75"/>
+<itemref idref="id62"/>
+<itemref idref="id39"/>
+<itemref idref="id24"/>
+<itemref idref="id98"/>
+<itemref idref="id86"/>
+<itemref idref="id61"/>
+<itemref idref="id72"/>
+<itemref idref="id59"/>
+<itemref idref="id47"/>
+<itemref idref="id20"/>
+<itemref idref="id8"/>
+<itemref idref="id81"/>
+<itemref idref="id71"/>
+<itemref idref="id90"/>
+</spine>
+<guide/></package>
