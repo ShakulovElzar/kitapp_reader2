@@ -8,10 +8,6 @@ import { AppModule } from './app.module.js';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   app.setGlobalPrefix('api');
-  app.useStaticAssets(
-    resolve(process.env.STORAGE_PATH ?? join(process.cwd(), 'storage')),
-    { prefix: '/files/' },
-  );
   app.enableCors({
     origin: process.env.ADMIN_ORIGIN?.split(',') ?? [
       'http://localhost:5173',
@@ -21,6 +17,10 @@ async function bootstrap() {
     ],
     credentials: true,
   });
+  app.useStaticAssets(
+    resolve(process.env.STORAGE_PATH ?? join(process.cwd(), 'storage')),
+    { prefix: '/files/' },
+  );
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, transform: true }),
   );

@@ -53,7 +53,12 @@ export class StorageService {
       }
 
       const containerXml = this.xml.parse(container.getData().toString('utf8'));
-      const opfPath = containerXml?.container?.rootfiles?.rootfile?.['full-path'];
+      const rootfiles = this.asArray(containerXml?.container?.rootfiles?.rootfile);
+      const selectedRootfile = rootfiles.find((item) => {
+        const path = item?.['full-path'];
+        return typeof path === 'string' && byName.has(path);
+      });
+      const opfPath = selectedRootfile?.['full-path'];
       const opfEntry = typeof opfPath === 'string' ? byName.get(opfPath) : undefined;
       if (!opfEntry) throw new Error('missing package');
       const packageXml = this.xml.parse(opfEntry.getData().toString('utf8'))?.package;
@@ -84,7 +89,8 @@ export class StorageService {
         metadata: { '@type': 'http://schema.org/Book', title, language, author },
         links: [{ rel: 'self', href: 'manifest.json', type: 'application/webpub+json' }],
         readingOrder,
-        tableOfContents: toc.length ? toc : readingOrder.map((item, index) => ({ title: `${index + 1}-бөлүм`, href: item.href })),
+        resources: readingOrder,
+        toc: toc.length ? toc : readingOrder.map((item, index) => ({ title: `${index + 1}-бөлүм`, href: item.href })),
       };
       await writeFile(join(temp, 'manifest.json'), JSON.stringify(manifest));
       await mkdir(dirname(target), { recursive: true });

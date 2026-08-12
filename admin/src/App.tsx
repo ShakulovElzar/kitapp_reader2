@@ -265,10 +265,14 @@ function DirectoriesPage() {
   useEffect(() => { void load(); }, []);
   async function addAuthor(event: FormEvent) { event.preventDefault(); await api('/admin/authors', { method: 'POST', body: JSON.stringify({ name: authorName }) }); setAuthorName(''); await load(); }
   async function addCategory(event: FormEvent) { event.preventDefault(); await api('/admin/categories', { method: 'POST', body: JSON.stringify({ name: categoryName, slug: slugify(categoryName) }) }); setCategoryName(''); await load(); }
+  async function editAuthor(author: Author) { const name = window.prompt('Автордун жаңы аты', author.name)?.trim(); if (!name || name === author.name) return; await api(`/admin/authors/${author.id}`, { method: 'PATCH', body: JSON.stringify({ name }) }); await load(); }
+  async function deleteAuthor(author: Author) { if (!window.confirm(`«${author.name}» авторун өчүрөсүзбү?`)) return; try { await api(`/admin/authors/${author.id}`, { method: 'DELETE' }); await load(); } catch (value) { window.alert(value instanceof Error ? value.message : 'Автор өчүрүлгөн жок'); } }
+  async function editCategory(category: Category) { const name = window.prompt('Категориянын жаңы аты', category.name)?.trim(); if (!name || name === category.name) return; await api(`/admin/categories/${category.id}`, { method: 'PATCH', body: JSON.stringify({ name, slug: slugify(name) }) }); await load(); }
+  async function deleteCategory(category: Category) { if (!window.confirm(`«${category.name}» категориясын өчүрөсүзбү?`)) return; try { await api(`/admin/categories/${category.id}`, { method: 'DELETE' }); await load(); } catch (value) { window.alert(value instanceof Error ? value.message : 'Категория өчүрүлгөн жок'); } }
   return (
     <div className="split-panels">
-      <section className="panel"><PanelHeader title={`Авторлор · ${authors.length}`} /><form className="inline-form" onSubmit={addAuthor}><input placeholder="Автордун аты" value={authorName} onChange={(e) => setAuthorName(e.target.value)} required /><button className="primary">Кошуу</button></form><SimpleList items={authors.map((a) => ({ id: a.id, title: a.name, note: `${a._count?.books ?? 0} китеп` }))} /></section>
-      <section className="panel"><PanelHeader title={`Категориялар · ${categories.length}`} /><form className="inline-form" onSubmit={addCategory}><input placeholder="Категориянын аталышы" value={categoryName} onChange={(e) => setCategoryName(e.target.value)} required /><button className="primary">Кошуу</button></form><SimpleList items={categories.map((c) => ({ id: c.id, title: c.name, note: `${c._count?.books ?? 0} китеп` }))} /></section>
+      <section className="panel"><PanelHeader title={`Авторлор · ${authors.length}`} /><form className="inline-form" onSubmit={addAuthor}><input placeholder="Автордун аты" value={authorName} onChange={(e) => setAuthorName(e.target.value)} required /><button className="primary">Кошуу</button></form><SimpleList items={authors.map((a) => ({ id: a.id, title: a.name, note: `${a._count?.books ?? 0} китеп`, onEdit: () => void editAuthor(a), onDelete: () => void deleteAuthor(a) }))} /></section>
+      <section className="panel"><PanelHeader title={`Категориялар · ${categories.length}`} /><form className="inline-form" onSubmit={addCategory}><input placeholder="Категориянын аталышы" value={categoryName} onChange={(e) => setCategoryName(e.target.value)} required /><button className="primary">Кошуу</button></form><SimpleList items={categories.map((c) => ({ id: c.id, title: c.name, note: `${c._count?.books ?? 0} китеп`, onEdit: () => void editCategory(c), onDelete: () => void deleteCategory(c) }))} /></section>
     </div>
   );
 }
@@ -296,12 +300,20 @@ function ReportsPage() {
   const [from, setFrom] = useState(monthStart);
   const [to, setTo] = useState(now.toISOString().slice(0, 10));
   const [report, setReport] = useState<SalesReport | null>(null);
-  async function load() { setReport(await api(`/admin/reports/sales?from=${from}&to=${to}`)); }
+  const [error, setError] = useState('');
+  async function load() {
+    setError('');
+    try {
+      setReport(await api(`/admin/reports/sales?from=${from}&to=${to}`));
+    } catch (value) {
+      setError(value instanceof Error ? value.message : 'Отчёт жүктөлгөн жок');
+    }
+  }
   useEffect(() => { void load(); }, []);
   const maximum = useMemo(() => Math.max(1, ...(report?.items.map((item) => item.quantity) ?? [1])), [report]);
   return (
     <div className="report-page">
-      <section className="panel report-filter"><div><h2>Китеп сатуу отчёту</h2><p>Кайсы автордун кайсы китеби канча сатылганын көрүңүз.</p></div><div className="date-filter"><Field label="Башталган күн"><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></Field><Field label="Аяктаган күн"><input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></Field><button className="primary" onClick={() => void load()}>Көрсөтүү</button></div></section>
+      <section className="panel report-filter"><div><h2>Китеп сатуу отчёту</h2><p>Кайсы автордун кайсы китеби канча сатылганын көрүңүз.</p>{error && <div className="alert error">{error}</div>}</div><div className="date-filter"><Field label="Башталган күн"><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></Field><Field label="Аяктаган күн"><input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></Field><button className="primary" onClick={() => void load()}>Көрсөтүү</button></div></section>
       {report ? <><section className="metrics two"><Metric label="Сатылган китеп" value={report.totalQuantity} note={`${from} — ${to}`} tone="green" /><Metric label="Жалпы киреше" value={som(report.totalRevenue)} note="Кайтаруулар эсептелбейт" tone="orange" /></section><section className="panel"><PanelHeader title="Китептер жана авторлор боюнча" /><div className="table-wrap"><table><thead><tr><th>Китеп</th><th>Автор</th><th>Сатылганы</th><th>Үлүшү</th><th>Киреше</th></tr></thead><tbody>{report.items.map((item) => <tr key={item.bookId}><td><strong>{item.title}</strong></td><td>{item.author}</td><td><strong>{item.quantity}</strong></td><td><div className="bar"><i style={{ width: `${(item.quantity / maximum) * 100}%` }} /></div></td><td><strong>{som(item.revenue)}</strong></td></tr>)}{!report.items.length && <tr><td colSpan={5}><Empty text="Бул мезгилде сатуу болгон жок" /></td></tr>}</tbody></table></div></section></> : <Loading />}
     </div>
   );
@@ -325,7 +337,7 @@ function Badge({ children, tone }: { children: ReactNode; tone: 'green' | 'amber
 function Loading() { return <div className="loading"><i /><span>Маалымат жүктөлүүдө…</span></div>; }
 function Empty({ text }: { text: string }) { return <div className="empty">{text}</div>; }
 function Modal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) { return <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}><section className="modal"><div className="modal-title"><h2>{title}</h2><button onClick={onClose}>×</button></div>{children}</section></div>; }
-function SimpleList({ items }: { items: Array<{ id: string; title: string; note: string }> }) { return <div className="simple-list">{items.map((item) => <article key={item.id}><div className="avatar light">{item.title.slice(0, 1)}</div><strong>{item.title}</strong><small>{item.note}</small></article>)}</div>; }
+function SimpleList({ items }: { items: Array<{ id: string; title: string; note: string; onEdit?: () => void; onDelete?: () => void }> }) { return <div className="simple-list">{items.map((item) => <article key={item.id}><div className="avatar light">{item.title.slice(0, 1)}</div><div><strong>{item.title}</strong><small>{item.note}</small></div><div className="row-actions"><button onClick={item.onEdit}>Өзгөртүү</button><button className="danger" onClick={item.onDelete}>Өчүрүү</button></div></article>)}</div>; }
 const slugify = (value: string) => value.toLowerCase().trim().replace(/[^a-zа-яёүөң0-9]+/gi, '-').replace(/^-|-$/g, '');
 const actionName = (value: string) => ({ CREATE: 'кошту', UPDATE: 'өзгөрттү', DELETE: 'архивдеди', UPLOAD: 'файл жүктөдү', BLOCK: 'бөгөттөдү', UNBLOCK: 'ачты' })[value] ?? value;
 const entityName = (value: string) => ({ Book: 'китепти', Author: 'авторду', Category: 'категорияны', Reader: 'окурманды' })[value] ?? value;

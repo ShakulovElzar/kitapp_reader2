@@ -1,6 +1,7 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Express } from 'express';
 import { AccessType, BookStatus, PaymentStatus } from '../generated/prisma/enums.js';
+import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import {
@@ -158,6 +159,9 @@ export class AdminService {
       return book;
     } catch (error) {
       await Promise.all([this.storage.remove(coverKey), this.storage.remove(epubKey)]);
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException('Мындай URL белгиси бар китеп мурунтан бар');
+      }
       throw error;
     }
   }

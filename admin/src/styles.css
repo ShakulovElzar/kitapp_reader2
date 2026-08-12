@@ -123,6 +123,7 @@ td small { color: #8d9991; display: block; margin-top: 3px; }
 .inline-form { display: flex; gap: 9px; padding: 18px 22px; border-bottom: 1px solid var(--line); }
 .simple-list { max-height: calc(100vh - 285px); overflow: auto; }
 .simple-list article { padding: 13px 22px; display: grid; grid-template-columns: 38px 1fr auto; align-items: center; gap: 11px; border-top: 1px solid #f0f2f0; }
+.simple-list article > div:nth-child(2) { display: flex; flex-direction: column; gap: 3px; }
 .simple-list article strong { font-size: 12px; }
 .simple-list article small { color: var(--muted); font-size: 10px; }
 

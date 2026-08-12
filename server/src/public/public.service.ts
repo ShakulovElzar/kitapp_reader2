@@ -78,11 +78,11 @@ export class PublicService {
   async library(readerId: string) {
     const [purchases, rentals, freeBooks] = await Promise.all([
       this.prisma.purchase.findMany({
-        where: { readerId, status: PaymentStatus.COMPLETED },
+        where: { readerId, status: PaymentStatus.COMPLETED, book: this.publicBookWhere() },
         include: { book: { include: { author: true, category: true } } },
       }),
       this.prisma.rental.findMany({
-        where: { readerId, status: PaymentStatus.COMPLETED, endsAt: { gt: new Date() } },
+        where: { readerId, status: PaymentStatus.COMPLETED, endsAt: { gt: new Date() }, book: this.publicBookWhere() },
         include: { book: { include: { author: true, category: true } } },
       }),
       this.prisma.book.findMany({
@@ -90,11 +90,15 @@ export class PublicService {
         include: { author: true, category: true },
       }),
     ]);
-    const unique = new Map(
-      [...purchases.map((item) => item.book), ...rentals.map((item) => item.book), ...freeBooks]
-        .map((book) => [book.id, book]),
-    );
-    return Promise.all([...unique.values()].map((book) => this.presentBook(book)));
+    const unique = new Map<string, { book: (typeof freeBooks)[number]; readerAccess: string; rentalEndsAt?: Date }>();
+    for (const book of freeBooks) unique.set(book.id, { book, readerAccess: AccessType.FREE });
+    for (const item of rentals) unique.set(item.book.id, { book: item.book, readerAccess: AccessType.RENTAL, rentalEndsAt: item.endsAt });
+    for (const item of purchases) unique.set(item.book.id, { book: item.book, readerAccess: AccessType.PURCHASE });
+    return Promise.all([...unique.values()].map(async (item) => ({
+      ...await this.presentBook(item.book),
+      readerAccess: item.readerAccess,
+      rentalEndsAt: item.rentalEndsAt ?? null,
+    })));
   }
 
   async readerFile(readerId: string, bookId: string) {
