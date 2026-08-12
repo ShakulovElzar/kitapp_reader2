@@ -2,83 +2,123 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/book.dart';
+import '../services/api_client.dart';
 
 class AppStateController extends ChangeNotifier {
-  AppStateController._(this._prefs);
+  AppStateController._(this._prefs, this.api);
 
   final SharedPreferences _prefs;
-  final Set<String> _purchased = {};
-  final Map<String, DateTime> _rentals = {};
+  final ApiClient api;
   final Map<String, double> _progress = {};
+  final Map<String, DateTime> _rentalEnds = {};
+  final Set<String> _libraryIds = {};
+  List<Book> _books = const [];
+  List<Book> _library = const [];
+  List<RecentBook> _recent = const [];
   bool _showAdult = false;
+  bool _loading = false;
+  String? _error;
 
   static Future<AppStateController> load() async {
     final prefs = await SharedPreferences.getInstance();
-    final state = AppStateController._(prefs);
-    state._purchased.addAll(prefs.getStringList('purchased_books') ?? []);
+    final state = AppStateController._(prefs, ApiClient(prefs));
     state._showAdult = prefs.getBool('show_adult') ?? false;
-
-    for (final book in demoBooks) {
-      final rental = prefs.getString('rental_${book.id}');
-      final progress = prefs.getDouble('progress_${book.id}');
-      if (rental != null) {
-        final date = DateTime.tryParse(rental);
-        if (date != null) state._rentals[book.id] = date;
+    for (final key in prefs.getKeys().where(
+      (key) => key.startsWith('progress_'),
+    )) {
+      final value = prefs.getDouble(key);
+      if (value != null) {
+        state._progress[key.substring('progress_'.length)] = value;
       }
-      if (progress != null) state._progress[book.id] = progress;
     }
+    if (state.isAuthenticated) await state.refresh();
     return state;
   }
 
+  bool get isAuthenticated => api.token != null;
+  String get phone => api.phone ?? '';
+  bool get loading => _loading;
+  String? get error => _error;
   bool get showAdult => _showAdult;
+  List<RecentBook> get recent => _recent;
 
-  List<Book> get visibleBooks => demoBooks
+  List<Book> get visibleBooks => _books
+      .where((book) => _showAdult || !book.isAdult)
+      .toList(growable: false);
+  List<Book> get libraryBooks => _library
       .where((book) => _showAdult || !book.isAdult)
       .toList(growable: false);
 
-  List<Book> get libraryBooks =>
-      demoBooks.where((book) => hasAccess(book)).toList(growable: false);
-
-  bool isPurchased(Book book) => _purchased.contains(book.id);
-
-  DateTime? rentalEnd(Book book) => _rentals[book.id];
-
-  bool isRented(Book book) {
-    final end = rentalEnd(book);
-    return end != null && end.isAfter(DateTime.now());
-  }
-
-  bool hasAccess(Book book) =>
-      book.isFree || isPurchased(book) || isRented(book);
-
+  bool isPurchased(Book book) =>
+      _libraryIds.contains(book.id) && !isRented(book) && !book.isFree;
+  DateTime? rentalEnd(Book book) => _rentalEnds[book.id];
+  bool isRented(Book book) => rentalEnd(book)?.isAfter(DateTime.now()) ?? false;
+  bool hasAccess(Book book) => book.isFree || _libraryIds.contains(book.id);
   double progressFor(Book book) => _progress[book.id] ?? 0;
 
-  Future<void> buy(Book book) async {
-    _purchased.add(book.id);
-    _rentals.remove(book.id);
-    await _prefs.setStringList('purchased_books', _purchased.toList());
-    await _prefs.remove('rental_${book.id}');
+  Future<void> requestOtp(String phone) => api.requestOtp(phone);
+
+  Future<void> verifyOtp(String phone, String code) async {
+    await api.verifyOtp(phone, code);
+    await refresh();
     notifyListeners();
+  }
+
+  Future<void> logout() async {
+    await api.logout();
+    _books = const [];
+    _library = const [];
+    _recent = const [];
+    _libraryIds.clear();
+    notifyListeners();
+  }
+
+  Future<void> refresh() async {
+    _loading = true;
+    _error = null;
+    notifyListeners();
+    try {
+      final results = await Future.wait([
+        api.catalog(),
+        api.library(),
+        api.recent(),
+      ]);
+      _books = results[0] as List<Book>;
+      _library = results[1] as List<Book>;
+      _recent = results[2] as List<RecentBook>;
+      _libraryIds
+        ..clear()
+        ..addAll(_library.map((book) => book.id));
+      _rentalEnds
+        ..clear()
+        ..addEntries(
+          _library
+              .where((book) => book.rentalEndsAt != null)
+              .map((book) => MapEntry(book.id, book.rentalEndsAt!)),
+        );
+      for (final item in _recent) {
+        _progress[item.book.id] = item.progression;
+      }
+    } on ApiException catch (error) {
+      _error = error.message;
+      rethrow;
+    } finally {
+      _loading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> buy(Book book) async {
+    await api.buy(book.id);
+    await refresh();
   }
 
   Future<void> rent(Book book) async {
-    final end = DateTime.now().add(const Duration(days: 7));
-    _rentals[book.id] = end;
-    await _prefs.setString('rental_${book.id}', end.toIso8601String());
-    notifyListeners();
+    await api.rent(book.id);
+    await refresh();
   }
 
   Future<void> addFree(Book book) => buy(book);
-
-  Future<void> removeFromLibrary(Book book) async {
-    _purchased.remove(book.id);
-    _rentals.remove(book.id);
-    _progress.remove(book.id);
-    await _prefs.setStringList('purchased_books', _purchased.toList());
-    await _prefs.remove('rental_${book.id}');
-    await _prefs.remove('progress_${book.id}');
-    notifyListeners();
-  }
 
   Future<void> setProgress(Book book, double value) async {
     final progress = value.clamp(0.0, 1.0);

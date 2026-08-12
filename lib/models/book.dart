@@ -3,6 +3,7 @@ enum BookAccess { free, purchase, rental }
 class Book {
   const Book({
     required this.id,
+    required this.slug,
     required this.title,
     required this.author,
     required this.category,
@@ -12,229 +13,86 @@ class Book {
     required this.coverStart,
     required this.coverEnd,
     required this.coverMark,
+    this.coverUrl,
+    this.rentalPrice,
+    this.rentalDays,
     this.isAdult = false,
     this.isNew = false,
     this.access = BookAccess.purchase,
-    this.description =
-        'Бул чыгарма окурманды өзгөчө дүйнөгө жетелеп, адамдык тандоо, сүйүү жана үмүт жөнүндө баяндайт.',
+    this.description = '',
+    this.readerAccess,
+    this.rentalEndsAt,
   });
 
+  factory Book.fromJson(Map<String, dynamic> json) {
+    final title = json['title']?.toString() ?? 'Аталышы жок';
+    final seed = title.codeUnits.fold<int>(0, (value, item) => value + item);
+    final access = switch (json['accessType']) {
+      'FREE' => BookAccess.free,
+      'RENTAL' => BookAccess.rental,
+      _ => BookAccess.purchase,
+    };
+    return Book(
+      id: json['id'].toString(),
+      slug: json['slug']?.toString() ?? json['id'].toString(),
+      title: title,
+      author:
+          (json['author'] as Map<String, dynamic>?)?['name']?.toString() ??
+          'Белгисиз автор',
+      category:
+          (json['category'] as Map<String, dynamic>?)?['name']?.toString() ??
+          'Башка',
+      price: (json['price'] as num?)?.round() ?? 0,
+      rentalPrice: (json['rentalPrice'] as num?)?.round(),
+      rentalDays: (json['rentalDays'] as num?)?.round(),
+      pages: (json['pages'] as num?)?.round() ?? 1,
+      rating: (json['rating'] as num?)?.toDouble() ?? 0,
+      isAdult: json['isAdult'] == true,
+      isNew: json['isNew'] == true,
+      access: access,
+      description: json['description']?.toString() ?? '',
+      coverUrl: json['coverUrl']?.toString(),
+      readerAccess: json['readerAccess']?.toString(),
+      rentalEndsAt: json['rentalEndsAt'] == null
+          ? null
+          : DateTime.tryParse(json['rentalEndsAt'].toString()),
+      coverStart: _palette[seed % _palette.length].$1,
+      coverEnd: _palette[seed % _palette.length].$2,
+      coverMark: title.split(RegExp(r'\s+')).first.toUpperCase(),
+    );
+  }
+
   final String id;
+  final String slug;
   final String title;
   final String author;
   final String category;
   final int price;
+  final int? rentalPrice;
+  final int? rentalDays;
   final int pages;
   final double rating;
   final int coverStart;
   final int coverEnd;
   final String coverMark;
+  final String? coverUrl;
   final bool isAdult;
   final bool isNew;
   final BookAccess access;
   final String description;
+  final String? readerAccess;
+  final DateTime? rentalEndsAt;
 
   bool get isFree => access == BookAccess.free || price == 0;
+  bool get canRent => rentalPrice != null && rentalDays != null;
+  bool get canBuy => access == BookAccess.purchase;
 }
 
-const demoBooks = <Book>[
-  Book(
-    id: 'diamond-snake',
-    title: 'Бриллиант жылан',
-    author: 'Чолпонбек Абдыкеев',
-    category: 'Детектив',
-    price: 299,
-    pages: 352,
-    rating: 4.7,
-    coverStart: 0xFF0B1918,
-    coverEnd: 0xFF1C604B,
-    coverMark: 'ЖЫЛАН',
-    isNew: true,
-  ),
-  Book(
-    id: 'sun-secret',
-    title: 'Күнгө сырдын артында',
-    author: 'Чолпонбек Абдыкеев',
-    category: 'Роман',
-    price: 299,
-    pages: 417,
-    rating: 4.8,
-    coverStart: 0xFF071B22,
-    coverEnd: 0xFF536C62,
-    coverMark: 'СЫР',
-  ),
-  Book(
-    id: 'moon-city',
-    title: 'Айкөлдүн жоктоосу',
-    author: 'Элмира Сариева',
-    category: 'Тарыхый',
-    price: 299,
-    pages: 286,
-    rating: 4.9,
-    coverStart: 0xFF79533B,
-    coverEnd: 0xFFF3C77B,
-    coverMark: 'АЙКӨЛ',
-    isNew: true,
-  ),
-  Book(
-    id: 'faith-light',
-    title: 'Ыйман нуру',
-    author: 'Азиз Мырза',
-    category: 'Дин',
-    price: 199,
-    pages: 224,
-    rating: 4.9,
-    coverStart: 0xFF071718,
-    coverEnd: 0xFF0C5D4C,
-    coverMark: 'НУР',
-  ),
-  Book(
-    id: 'ancient-city',
-    title: 'Байыркы шаар',
-    author: 'Талант Асанов',
-    category: 'Тарыхый',
-    price: 299,
-    pages: 390,
-    rating: 4.6,
-    coverStart: 0xFF563416,
-    coverEnd: 0xFFD49B4D,
-    coverMark: 'ШААР',
-  ),
-  Book(
-    id: 'mountain-path',
-    title: 'Тоодогу жол',
-    author: 'Асел Токтосунова',
-    category: 'Роман',
-    price: 249,
-    pages: 312,
-    rating: 4.5,
-    coverStart: 0xFF182F36,
-    coverEnd: 0xFF799AA0,
-    coverMark: 'ЖОЛ',
-  ),
-  Book(
-    id: 'new-life',
-    title: 'Жаңы жашоо',
-    author: 'Жылдыз Жапарова',
-    category: 'Роман',
-    price: 199,
-    pages: 265,
-    rating: 4.4,
-    coverStart: 0xFF6B413E,
-    coverEnd: 0xFFE9A284,
-    coverMark: 'ЖАШОО',
-    isNew: true,
-  ),
-  Book(
-    id: 'two-worlds',
-    title: 'Эки дүйнө',
-    author: 'Нурбек Осмонов',
-    category: 'Фантастика',
-    price: 349,
-    pages: 480,
-    rating: 4.8,
-    coverStart: 0xFF15112B,
-    coverEnd: 0xFF6C5397,
-    coverMark: 'ЭКИ',
-    isAdult: true,
-  ),
-  Book(
-    id: 'hope',
-    title: 'Үмүт',
-    author: 'Айдана Касымова',
-    category: 'Поэзия',
-    price: 0,
-    pages: 164,
-    rating: 4.7,
-    coverStart: 0xFF315844,
-    coverEnd: 0xFFB4D2A7,
-    coverMark: 'ҮМҮТ',
-    access: BookAccess.free,
-  ),
-  Book(
-    id: 'honor',
-    title: 'Намыс',
-    author: 'Калыс Сыдыков',
-    category: 'Драма',
-    price: 249,
-    pages: 338,
-    rating: 4.6,
-    coverStart: 0xFF32180C,
-    coverEnd: 0xFFA96A36,
-    coverMark: 'НАМЫС',
-  ),
-  Book(
-    id: 'white-cloud',
-    title: 'Ак булут',
-    author: 'Мээрим Асанова',
-    category: 'Балдар үчүн',
-    price: 149,
-    pages: 128,
-    rating: 4.9,
-    coverStart: 0xFF4F8FB5,
-    coverEnd: 0xFFE9F3F5,
-    coverMark: 'БУЛУТ',
-  ),
-  Book(
-    id: 'last-letter',
-    title: 'Акыркы кат',
-    author: 'Сезим Ибраева',
-    category: 'Роман',
-    price: 199,
-    pages: 276,
-    rating: 4.7,
-    coverStart: 0xFF322B2A,
-    coverEnd: 0xFFB88770,
-    coverMark: 'КАТ',
-  ),
-  Book(
-    id: 'legends',
-    title: 'Кыргыз уламыштары',
-    author: 'Элдик чыгарма',
-    category: 'Балдар үчүн',
-    price: 0,
-    pages: 198,
-    rating: 4.9,
-    coverStart: 0xFF122F2B,
-    coverEnd: 0xFF4F977B,
-    coverMark: 'УКМУШ',
-    access: BookAccess.free,
-  ),
-  Book(
-    id: 'red-castle',
-    title: 'Кызыл сепил',
-    author: 'Бакыт Эсенов',
-    category: 'Фантастика',
-    price: 399,
-    pages: 532,
-    rating: 4.5,
-    coverStart: 0xFF300C0C,
-    coverEnd: 0xFF9E3B2E,
-    coverMark: 'СЕПИЛ',
-    isAdult: true,
-  ),
-  Book(
-    id: 'garden',
-    title: 'Жан дүйнө багы',
-    author: 'Айпери Муратова',
-    category: 'Психология',
-    price: 249,
-    pages: 240,
-    rating: 4.8,
-    coverStart: 0xFF1C4B35,
-    coverEnd: 0xFF8DB482,
-    coverMark: 'БАК',
-  ),
-  Book(
-    id: 'samurai',
-    title: 'Самурай жолу',
-    author: 'Кайрат Бектуров',
-    category: 'Тарыхый',
-    price: 299,
-    pages: 405,
-    rating: 4.6,
-    coverStart: 0xFF151515,
-    coverEnd: 0xFF6B3930,
-    coverMark: 'ЖОЛ',
-  ),
+const _palette = <(int, int)>[
+  (0xFF0B1918, 0xFF1C604B),
+  (0xFF79533B, 0xFFF3C77B),
+  (0xFF6B413E, 0xFFE9A284),
+  (0xFF4F8FB5, 0xFFE9F3F5),
+  (0xFF15112B, 0xFF6C5397),
+  (0xFF32180C, 0xFFA96A36),
 ];

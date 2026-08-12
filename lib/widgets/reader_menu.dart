@@ -115,14 +115,22 @@ class ReaderMenu extends StatelessWidget {
                       ),
                     ),
 
-                    GestureDetector(
-                      onTap: onBookmarkToggle,
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: 6),
-                        child: Icon(
-                          isBookmarked ? Icons.bookmark : Icons.bookmark_border,
-                          color: const Color(0xFF5E9F73),
-                          size: 40,
+                    Semantics(
+                      button: true,
+                      label: isBookmarked
+                          ? 'Кыстарманы өчүрүү'
+                          : 'Кыстарма кошуу',
+                      child: GestureDetector(
+                        onTap: onBookmarkToggle,
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 6),
+                          child: Icon(
+                            isBookmarked
+                                ? Icons.bookmark
+                                : Icons.bookmark_border,
+                            color: const Color(0xFF5E9F73),
+                            size: 40,
+                          ),
                         ),
                       ),
                     ),

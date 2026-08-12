@@ -26,10 +26,34 @@ class CatalogScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final books = AppStateScope.of(context).visibleBooks;
+    final state = AppStateScope.of(context);
+    final books = state.visibleBooks;
+    if (state.loading && books.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (state.error != null && books.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(state.error!, textAlign: TextAlign.center),
+              const SizedBox(height: 12),
+              FilledButton(
+                onPressed: state.refresh,
+                child: const Text('Кайра аракет кылуу'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     final newest = books.where((book) => book.isNew).toList();
     final popular = [...books]..sort((a, b) => b.rating.compareTo(a.rating));
     final authors = books.reversed.toList();
+    final categories = books.map((book) => book.category).toSet().toList()
+      ..sort();
 
     return SafeArea(
       bottom: false,
@@ -110,14 +134,7 @@ class CatalogScreen extends StatelessWidget {
                   vertical: 9,
                 ),
                 children: [
-                  for (final category in const [
-                    'Баары',
-                    'Роман',
-                    'Поэзия',
-                    'Тарыхый',
-                    'Детектив',
-                    'Фантастика',
-                  ])
+                  for (final category in ['Баары', ...categories])
                     Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: ActionChip(
@@ -143,6 +160,12 @@ class CatalogScreen extends StatelessWidget {
               ),
             ),
           ),
+          if (state.recent.isNotEmpty)
+            _BookSection(
+              title: 'Окууну улантуу',
+              books: state.recent.map((item) => item.book).toList(),
+              onBookTap: (book) => _openBook(context, book),
+            ),
           _BookSection(
             title: 'Жаңы болуп чыкты',
             books: newest.isEmpty ? books.take(5).toList() : newest,
@@ -181,13 +204,13 @@ class _BookSection extends StatelessWidget {
     required this.title,
     required this.books,
     required this.onBookTap,
-    required this.onAllTap,
+    this.onAllTap,
   });
 
   final String title;
   final List<Book> books;
   final ValueChanged<Book> onBookTap;
-  final VoidCallback onAllTap;
+  final VoidCallback? onAllTap;
 
   @override
   Widget build(BuildContext context) {

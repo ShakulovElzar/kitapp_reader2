@@ -28,9 +28,9 @@ class ProfileScreen extends StatelessWidget {
             style: TextStyle(fontSize: 27, fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 6),
-          const Text(
-            '+996 555 24 12 56',
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+          Text(
+            state.phone,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 24),
           _ProfileGroup(
@@ -129,14 +129,17 @@ class ProfileScreen extends StatelessWidget {
               context: context,
               builder: (context) => AlertDialog(
                 title: const Text('Чыгуу'),
-                content: const Text('Демо-профилден чыгууну каалайсызбы?'),
+                content: const Text('Профилден чыгууну каалайсызбы?'),
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.pop(context),
                     child: const Text('Жок'),
                   ),
                   FilledButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () async {
+                      Navigator.pop(context);
+                      await state.logout();
+                    },
                     child: const Text('Ооба'),
                   ),
                 ],

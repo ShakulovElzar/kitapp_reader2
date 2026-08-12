@@ -6,8 +6,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flureadium/flureadium.dart';
+import 'package:http/http.dart' as http;
 
 import '../models/book.dart';
+import '../services/api_client.dart';
+import '../state/app_state.dart';
 import '../widgets/reader_menu.dart';
 import '../widgets/settings_sheet.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -26,12 +29,19 @@ class ReaderScreen extends StatefulWidget {
   State<ReaderScreen> createState() => _ReaderScreenState();
 }
 
-class _ReaderScreenState extends State<ReaderScreen> {
+class _ReaderScreenState extends State<ReaderScreen>
+    with WidgetsBindingObserver {
   final Flureadium _flureadium = Flureadium();
 
   Publication? _publication;
 
   Object? _loadError;
+
+  String? _manifestUrl;
+  ApiClient? _api;
+  Timer? _readingTimer;
+  int _unsyncedActiveSeconds = 0;
+  bool _isActive = true;
 
   int _fontSize = 120;
 
@@ -42,6 +52,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   bool _isDraggingSlider = false;
 
   Locator? _currentLocator;
+  Locator? _initialLocator;
 
   int _currentPage = 1;
 
@@ -91,6 +102,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
   void initState() {
     super.initState();
 
+    WidgetsBinding.instance.addObserver(this);
+
     registerReaderSwipeBridge(
       onForward: () => unawaited(_flureadium.goRight()),
       onBackward: () => unawaited(_flureadium.goLeft()),
@@ -99,9 +112,17 @@ class _ReaderScreenState extends State<ReaderScreen> {
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      _api = AppStateScope.of(context).api;
       await _loadReaderPreferences();
-      _openBook();
+      await _openBook();
+      _startReadingTimer();
     });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _isActive = state == AppLifecycleState.resumed;
+    if (!_isActive) unawaited(_syncReadingProgress());
   }
 
   Future<void> _loadReaderPreferences() async {
@@ -140,20 +161,16 @@ class _ReaderScreenState extends State<ReaderScreen> {
     }
 
     try {
-      const assetPath = 'assets/books/test.epub';
-
       if (kIsWeb) {
-        final manifest =
-            jsonDecode(
-                  await rootBundle.loadString('web/books/test/manifest.json'),
-                )
-                as Map<String, dynamic>;
+        final savedLocator = await _loadSavedLocator();
+        final manifestUrl = await _api!.bookManifest(_bookId);
+        final response = await http.get(Uri.parse(manifestUrl));
+        if (response.statusCode != 200) {
+          throw StateError('EPUB манифести жүктөлгөн жок');
+        }
+        final manifest = jsonDecode(response.body) as Map<String, dynamic>;
 
         final links = manifest['links'] as List<dynamic>;
-
-        final manifestUrl = Uri.base
-            .resolve('books/test/manifest.json')
-            .toString();
 
         (links.first as Map<String, dynamic>)['href'] = manifestUrl;
 
@@ -179,18 +196,23 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
         setState(() {
           _publication = publication;
+          _manifestUrl = manifestUrl;
+          _initialLocator = savedLocator == null
+              ? null
+              : _relativeLocator(savedLocator);
           _tableOfContents = publication.tableOfContents;
         });
 
         return;
       }
 
-      final bytes = await rootBundle.load(assetPath);
+      final bytes = await rootBundle.load('assets/books/test.epub');
 
       final tempFile = File('${Directory.systemTemp.path}/test.epub');
 
       await tempFile.writeAsBytes(bytes.buffer.asUint8List());
 
+      final savedLocator = await _loadSavedLocator();
       final publication = await _flureadium.openPublication(tempFile.path);
 
       debugPrint(publication.toString());
@@ -203,6 +225,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
       setState(() {
         _publication = publication;
+        _initialLocator = savedLocator;
 
         _tableOfContents = publication.tableOfContents;
       });
@@ -216,6 +239,32 @@ class _ReaderScreenState extends State<ReaderScreen> {
       setState(() {
         _loadError = e;
       });
+    }
+  }
+
+  void _startReadingTimer() {
+    _readingTimer?.cancel();
+    _readingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!_isActive || _publication == null || _currentLocator == null) return;
+      _unsyncedActiveSeconds++;
+      if (_unsyncedActiveSeconds >= 30) unawaited(_syncReadingProgress());
+    });
+  }
+
+  Future<void> _syncReadingProgress() async {
+    final seconds = _unsyncedActiveSeconds;
+    final locator = _currentLocator;
+    if (seconds == 0 || locator == null || _api == null) return;
+    _unsyncedActiveSeconds = 0;
+    try {
+      await _api!.saveProgress(
+        bookId: _bookId,
+        progression: locator.locations?.totalProgression ?? _sliderProgress,
+        activeSeconds: seconds,
+        locator: jsonDecode(locator.json) as Map<String, dynamic>,
+      );
+    } catch (_) {
+      _unsyncedActiveSeconds += seconds;
     }
   }
 
@@ -235,6 +284,27 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
       return null;
     }
+  }
+
+  String _relativeHref(String href) {
+    final manifestUrl = _manifestUrl;
+    if (manifestUrl == null) return href.replaceFirst(RegExp(r'^/'), '');
+    final base = Uri.parse(manifestUrl).resolve('.');
+    final target = Uri.parse(href);
+    if (!target.hasScheme) return href.replaceFirst(RegExp(r'^/'), '');
+    if (target.scheme != base.scheme || target.authority != base.authority) {
+      return href;
+    }
+    final basePath = base.path.endsWith('/') ? base.path : '${base.path}/';
+    if (!target.path.startsWith(basePath)) return href;
+    final relative = target.path.substring(basePath.length);
+    return target.fragment.isEmpty ? relative : '$relative#${target.fragment}';
+  }
+
+  Locator _relativeLocator(Locator locator) {
+    final value = jsonDecode(locator.json) as Map<String, dynamic>;
+    value['href'] = _relativeHref(locator.href);
+    return Locator.fromJson(value)!;
   }
 
   void _subscribeToChannels() {
@@ -338,16 +408,15 @@ class _ReaderScreenState extends State<ReaderScreen> {
     final exists = bookmarks.contains(locatorJson);
 
     if (exists) {
-      final index = bookmarks.indexOf(locatorJson);
-
       bookmarks.remove(locatorJson);
 
       await prefs.setStringList(_bookmarksKey, bookmarks);
 
-      final titles = prefs.getStringList('bookmark_titles_$_bookId') ?? [];
-
-      if (index >= 0 && index < titles.length) {
-        await prefs.setStringList('bookmark_titles_$_bookId', titles);
+      final rawTitles = prefs.getString('bookmark_titles_$_bookId');
+      if (rawTitles != null) {
+        final titles = Map<String, dynamic>.from(jsonDecode(rawTitles) as Map);
+        titles.remove(locatorJson);
+        await prefs.setString('bookmark_titles_$_bookId', jsonEncode(titles));
       }
 
       if (!mounted) {
@@ -386,6 +455,13 @@ class _ReaderScreenState extends State<ReaderScreen> {
     }
   }
 
+  Future<void> _rememberLocator(Locator locator) async {
+    if (mounted) {
+      setState(() => _currentLocator = locator);
+    }
+    await _saveLocator(locator);
+  }
+
   Future<void> _applyReaderStyle() async {
     await _flureadium.setEPUBPreferences(
       EPUBPreferences(
@@ -418,7 +494,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   }
 
   Future<void> _decreaseFont() async {
-    if (_fontSize <= 90) {
+    if (_fontSize <= 80) {
       return;
     }
 
@@ -442,7 +518,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   }
 
   void _decreaseBrightness() {
-    if (_brightness <= 0.3) {
+    if (_brightness <= 0.4) {
       return;
     }
 
@@ -481,16 +557,6 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
   void _startMenuTimer() {
     _menuTimer?.cancel();
-
-    _menuTimer = Timer(const Duration(seconds: 3), () {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _showMenu = false;
-      });
-    });
   }
 
   void _toggleMenu() {
@@ -532,7 +598,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
             final link = _tableOfContents[index];
 
             final locator = Locator(
-              href: link.href,
+              href: _relativeHref(link.href),
               type: 'application/xhtml+xml',
             );
 
@@ -543,11 +609,13 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
             await Future.delayed(const Duration(milliseconds: 120));
 
-            await _flureadium.goToLocator(locator);
+            final target = _relativeLocator(locator);
+            await _flureadium.goToLocator(target);
 
             await Future.delayed(const Duration(milliseconds: 180));
 
-            await _flureadium.goToLocator(locator);
+            await _flureadium.goToLocator(target);
+            await _rememberLocator(target);
           },
         );
       },
@@ -576,6 +644,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
       useSafeArea: true,
       builder: (context) {
         return BookmarksSheet(
+          bookId: _bookId,
           onBookmarksLoaded: (bookmarks) {
             _bookmarks = bookmarks;
           },
@@ -587,11 +656,13 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
             await Future.delayed(const Duration(milliseconds: 120));
 
-            await _flureadium.goToLocator(locator);
+            final target = _relativeLocator(locator);
+            await _flureadium.goToLocator(target);
 
             await Future.delayed(const Duration(milliseconds: 180));
 
-            await _flureadium.goToLocator(locator);
+            await _flureadium.goToLocator(target);
+            await _rememberLocator(target);
 
             if (!mounted) {
               return;
@@ -646,10 +717,14 @@ class _ReaderScreenState extends State<ReaderScreen> {
       useSafeArea: true,
       builder: (context) {
         return SearchSheet(
+          bookId: _bookId,
+          manifestUrl: _manifestUrl!,
           publication: _publication!,
 
           onBookmarkTap: (locator) async {
-            await _flureadium.goToLocator(locator);
+            final target = _relativeLocator(locator);
+            await _flureadium.goToLocator(target);
+            await _rememberLocator(target);
           },
         );
       },
@@ -695,6 +770,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
           onDarkTheme: () => _setTheme('dark'),
 
           selectedTheme: _selectedTheme,
+          fontSize: _fontSize,
+          brightness: _brightness,
         );
       },
     ).then((_) {
@@ -787,6 +864,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
                         ignoring: _showMenu,
                         child: ReadiumReaderWidget(
                           publication: _publication!,
+                          initialLocator: _initialLocator,
 
                           onReady: () async {
                             _subscribeToChannels();
@@ -796,20 +874,6 @@ class _ReaderScreenState extends State<ReaderScreen> {
                             );
 
                             await _applyReaderStyle();
-
-                            final savedLocator = kIsWeb
-                                ? null
-                                : await _loadSavedLocator();
-
-                            if (savedLocator != null) {
-                              await Future.delayed(
-                                const Duration(milliseconds: 500),
-                              );
-
-                              await _flureadium.goToLocator(savedLocator);
-
-                              debugPrint('LOCATOR RESTORED');
-                            }
                           },
                         ),
                       ),
@@ -1070,7 +1134,9 @@ class _ReaderScreenState extends State<ReaderScreen> {
                                               }
 
                                               await _flureadium.goToLocator(
-                                                _preBookmarkLocator!,
+                                                _relativeLocator(
+                                                  _preBookmarkLocator!,
+                                                ),
                                               );
 
                                               if (!mounted) {
@@ -1132,7 +1198,11 @@ class _ReaderScreenState extends State<ReaderScreen> {
                                                           true;
 
                                                       await _flureadium
-                                                          .goToLocator(locator);
+                                                          .goToLocator(
+                                                            _relativeLocator(
+                                                              locator,
+                                                            ),
+                                                          );
 
                                                       if (!mounted) {
                                                         return;
@@ -1172,7 +1242,11 @@ class _ReaderScreenState extends State<ReaderScreen> {
                                                           true;
 
                                                       await _flureadium
-                                                          .goToLocator(locator);
+                                                          .goToLocator(
+                                                            _relativeLocator(
+                                                              locator,
+                                                            ),
+                                                          );
 
                                                       if (!mounted) {
                                                         return;
@@ -1269,6 +1343,9 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _readingTimer?.cancel();
+    unawaited(_syncReadingProgress());
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
     _menuTimer?.cancel();

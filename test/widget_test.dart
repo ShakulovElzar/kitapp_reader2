@@ -5,7 +5,7 @@ import 'package:kitapp_reader2/app.dart';
 import 'package:kitapp_reader2/state/app_state.dart';
 
 void main() {
-  testWidgets('shows the local book catalog', (tester) async {
+  testWidgets('shows phone-only authentication', (tester) async {
     SharedPreferences.setMockInitialValues({});
     final state = await AppStateController.load();
 
@@ -13,7 +13,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Kitapp'), findsOneWidget);
-    expect(find.text('Жаңы болуп чыкты'), findsOneWidget);
-    expect(find.text('Категориялар'), findsOneWidget);
+    expect(find.text('Телефон номериңиз менен кириңиз'), findsOneWidget);
+    expect(find.text('Код алуу'), findsOneWidget);
   });
 }

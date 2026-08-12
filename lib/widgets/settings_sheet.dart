@@ -17,6 +17,10 @@ class SettingsSheet extends StatefulWidget {
 
   final String selectedTheme;
 
+  final int fontSize;
+
+  final double brightness;
+
   const SettingsSheet({
     super.key,
     required this.onDecreaseFont,
@@ -27,6 +31,8 @@ class SettingsSheet extends StatefulWidget {
     required this.onSepiaTheme,
     required this.onDarkTheme,
     required this.selectedTheme,
+    required this.fontSize,
+    required this.brightness,
   });
 
   @override
@@ -35,12 +41,16 @@ class SettingsSheet extends StatefulWidget {
 
 class _SettingsSheetState extends State<SettingsSheet> {
   late String _selectedTheme;
+  late int _fontSize;
+  late double _brightness;
 
   @override
   void initState() {
     super.initState();
 
     _selectedTheme = widget.selectedTheme;
+    _fontSize = widget.fontSize;
+    _brightness = widget.brightness;
   }
 
   @override
@@ -98,8 +108,13 @@ class _SettingsSheetState extends State<SettingsSheet> {
             _settingRow(
               icon: Icons.text_fields,
               title: 'Текст өлчөмү',
+              value: '$_fontSize%',
               onMinus: widget.onDecreaseFont,
               onPlus: widget.onIncreaseFont,
+              onLocalMinus: () =>
+                  _fontSize = (_fontSize - 10).clamp(80, 180).toInt(),
+              onLocalPlus: () =>
+                  _fontSize = (_fontSize + 10).clamp(80, 180).toInt(),
             ),
 
             const SizedBox(height: 12),
@@ -107,8 +122,13 @@ class _SettingsSheetState extends State<SettingsSheet> {
             _settingRow(
               icon: Icons.brightness_6,
               title: 'Жарыктыгы',
+              value: '${(_brightness * 100).round()}%',
               onMinus: widget.onDecreaseBrightness,
               onPlus: widget.onIncreaseBrightness,
+              onLocalMinus: () =>
+                  _brightness = (_brightness - .1).clamp(.4, 1).toDouble(),
+              onLocalPlus: () =>
+                  _brightness = (_brightness + .1).clamp(.4, 1).toDouble(),
             ),
 
             const SizedBox(height: 18),
@@ -217,8 +237,11 @@ class _SettingsSheetState extends State<SettingsSheet> {
   Widget _settingRow({
     required IconData icon,
     required String title,
+    required String value,
     required VoidCallback onMinus,
     required VoidCallback onPlus,
+    required VoidCallback onLocalMinus,
+    required VoidCallback onLocalPlus,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -235,33 +258,60 @@ class _SettingsSheetState extends State<SettingsSheet> {
 
           const Spacer(),
 
-          GestureDetector(
-            onTap: onMinus,
-            child: Container(
-              width: 60,
-              height: 30,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
+          Semantics(
+            button: true,
+            label: '$title азайтуу',
+            child: InkWell(
+              onTap: () {
+                onMinus();
+                onLocalMinus();
+                setState(() {});
+              },
+              child: Container(
+                width: 60,
+                height: 30,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text('-', style: TextStyle(fontSize: 18)),
               ),
-              child: const Text('-', style: TextStyle(fontSize: 18)),
             ),
           ),
 
           const SizedBox(width: 8),
 
-          GestureDetector(
-            onTap: onPlus,
-            child: Container(
-              width: 60,
-              height: 30,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
+          SizedBox(
+            width: 46,
+            child: Text(
+              value,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 11),
+            ),
+          ),
+
+          const SizedBox(width: 8),
+
+          Semantics(
+            button: true,
+            label: '$title көбөйтүү',
+            child: InkWell(
+              onTap: () {
+                onPlus();
+                onLocalPlus();
+                setState(() {});
+              },
+              child: Container(
+                width: 60,
+                height: 30,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text('+', style: TextStyle(fontSize: 18)),
               ),
-              child: const Text('+', style: TextStyle(fontSize: 18)),
             ),
           ),
         ],

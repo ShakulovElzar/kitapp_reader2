@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'screens/app_shell.dart';
+import 'screens/phone_auth_screen.dart';
 import 'state/app_state.dart';
 import 'theme/app_theme.dart';
 
@@ -13,11 +14,16 @@ class KitappApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return AppStateScope(
       state: state,
-      child: MaterialApp(
-        title: 'Kitapp',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.light,
-        home: const AppShell(),
+      child: AnimatedBuilder(
+        animation: state,
+        builder: (context, _) => MaterialApp(
+          title: 'Kitapp',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.light,
+          home: state.isAuthenticated
+              ? const AppShell()
+              : const PhoneAuthScreen(),
+        ),
       ),
     );
   }

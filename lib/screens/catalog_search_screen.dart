@@ -80,6 +80,9 @@ class _CatalogSearchScreenState extends State<CatalogSearchScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _FilterSheet(
+        categories: AppStateScope.of(
+          context,
+        ).visibleBooks.map((book) => book.category).toSet().toList()..sort(),
         initial: _SearchFilters(
           category: _category,
           price: _price,
@@ -292,9 +295,10 @@ class _SearchFilters {
 }
 
 class _FilterSheet extends StatefulWidget {
-  const _FilterSheet({required this.initial});
+  const _FilterSheet({required this.initial, required this.categories});
 
   final _SearchFilters initial;
+  final List<String> categories;
 
   @override
   State<_FilterSheet> createState() => _FilterSheetState();
@@ -357,25 +361,15 @@ class _FilterSheetState extends State<_FilterSheet> {
             Wrap(
               spacing: 7,
               runSpacing: 7,
-              children:
-                  [
-                        null,
-                        'Роман',
-                        'Поэзия',
-                        'Тарыхый',
-                        'Детектив',
-                        'Фантастика',
-                        'Дин',
-                      ]
-                      .map(
-                        (category) => ChoiceChip(
-                          label: Text(category ?? 'Баары'),
-                          selected: _category == category,
-                          onSelected: (_) =>
-                              setState(() => _category = category),
-                        ),
-                      )
-                      .toList(),
+              children: <String?>[null, ...widget.categories]
+                  .map(
+                    (category) => ChoiceChip(
+                      label: Text(category ?? 'Баары'),
+                      selected: _category == category,
+                      onSelected: (_) => setState(() => _category = category),
+                    ),
+                  )
+                  .toList(),
             ),
             const SizedBox(height: 18),
             const Text(

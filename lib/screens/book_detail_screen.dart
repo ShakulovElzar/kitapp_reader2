@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../models/book.dart';
+import '../services/api_client.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/book_widgets.dart';
@@ -37,7 +39,16 @@ class BookDetailScreen extends StatelessWidget {
       ),
     );
     if (confirmed != true) return;
-    await state.buy(book);
+    try {
+      await state.buy(book);
+    } on ApiException catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
+      }
+      return;
+    }
     if (!context.mounted) return;
     ScaffoldMessenger.of(
       context,
@@ -51,9 +62,9 @@ class BookDetailScreen extends StatelessWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('7 күнгө ижарага алуу'),
+        title: Text('${book.rentalDays} күнгө ижарага алуу'),
         content: Text(
-          '«${book.title}» китеби 99 сомго 7 күнгө жеткиликтүү болот.',
+          '«${book.title}» китеби ${book.rentalPrice} сомго ${book.rentalDays} күнгө жеткиликтүү болот.',
         ),
         actions: [
           TextButton(
@@ -68,10 +79,19 @@ class BookDetailScreen extends StatelessWidget {
       ),
     );
     if (confirmed != true) return;
-    await state.rent(book);
+    try {
+      await state.rent(book);
+    } on ApiException catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
+      }
+      return;
+    }
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Китеп 7 күнгө ижарага алынды')),
+      SnackBar(content: Text('Китеп ${book.rentalDays} күнгө ижарага алынды')),
     );
   }
 
@@ -97,9 +117,17 @@ class BookDetailScreen extends StatelessWidget {
         actions: [
           IconButton(
             tooltip: 'Бөлүшүү',
-            onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Китептин шилтемеси көчүрүлдү')),
-            ),
+            onPressed: () async {
+              await Clipboard.setData(
+                ClipboardData(
+                  text: Uri.base.resolve('/books/${book.slug}').toString(),
+                ),
+              );
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Китептин шилтемеси көчүрүлдү')),
+              );
+            },
             icon: const Icon(Icons.ios_share_rounded),
           ),
         ],
@@ -282,7 +310,7 @@ class BookDetailScreen extends StatelessWidget {
                         : '${book.price} сомго сатып алуу',
                   ),
                 ),
-                if (!book.isFree) ...[
+                if (book.canRent) ...[
                   const SizedBox(height: 10),
                   OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
@@ -290,7 +318,9 @@ class BookDetailScreen extends StatelessWidget {
                     ),
                     onPressed: () => _confirmRent(context, state),
                     icon: const Icon(Icons.schedule_rounded),
-                    label: const Text('7 күнгө 99 сомго ижарага алуу'),
+                    label: Text(
+                      '${book.rentalDays} күнгө ${book.rentalPrice} сомго ижарага алуу',
+                    ),
                   ),
                 ],
               ],

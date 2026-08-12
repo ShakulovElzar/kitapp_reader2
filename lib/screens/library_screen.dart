@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../models/book.dart';
 import '../state/app_state.dart';
@@ -139,9 +140,15 @@ class _LibraryBookRow extends StatelessWidget {
                                 builder: (_) => BookDetailScreen(book: book),
                               ),
                             );
-                          } else if (value == 'remove') {
-                            await state.removeFromLibrary(book);
                           } else if (value == 'share' && context.mounted) {
+                            await Clipboard.setData(
+                              ClipboardData(
+                                text: Uri.base
+                                    .resolve('/books/${book.slug}')
+                                    .toString(),
+                              ),
+                            );
+                            if (!context.mounted) return;
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text('Китептин шилтемеси көчүрүлдү'),
@@ -155,7 +162,6 @@ class _LibraryBookRow extends StatelessWidget {
                             child: Text('Китеп жөнүндө'),
                           ),
                           PopupMenuItem(value: 'share', child: Text('Бөлүшүү')),
-                          PopupMenuItem(value: 'remove', child: Text('Өчүрүү')),
                         ],
                       ),
                     ],
@@ -200,9 +206,9 @@ class _LibraryBookRow extends StatelessWidget {
                           ),
                         )
                       else
-                        const Text(
-                          'Сатып алынган',
-                          style: TextStyle(
+                        Text(
+                          book.isFree ? 'Акысыз' : 'Сатып алынган',
+                          style: const TextStyle(
                             color: AppColors.green,
                             fontSize: 10,
                             fontWeight: FontWeight.w700,

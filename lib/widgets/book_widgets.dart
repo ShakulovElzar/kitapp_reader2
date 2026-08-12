@@ -40,58 +40,70 @@ class BookCover extends StatelessWidget {
       ),
       child: Stack(
         children: [
-          Positioned(
-            right: -width * .28,
-            bottom: height * .08,
-            child: Container(
-              width: width * .85,
-              height: width * .85,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white24, width: 1.5),
+          if (book.coverUrl != null)
+            Positioned.fill(
+              child: Image.network(
+                book.coverUrl!,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => const SizedBox.shrink(),
               ),
             ),
-          ),
-          Positioned(
-            left: width * .12,
-            right: width * .12,
-            top: height * .12,
-            child: Text(
-              book.author.toUpperCase(),
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: .72),
-                fontSize: width * .065,
-                fontWeight: FontWeight.w600,
-                letterSpacing: .5,
-              ),
-            ),
-          ),
-          Center(
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: width * .08),
-              child: Text(
-                book.coverMark,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontFamily: 'Georgia',
-                  fontSize: width * .18,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1,
-                  shadows: const [Shadow(color: Colors.black38, blurRadius: 8)],
+          if (book.coverUrl == null) ...[
+            Positioned(
+              right: -width * .28,
+              bottom: height * .08,
+              child: Container(
+                width: width * .85,
+                height: width * .85,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white24, width: 1.5),
                 ),
               ),
             ),
-          ),
-          Positioned(
-            left: width * .16,
-            right: width * .16,
-            bottom: height * .1,
-            child: Container(height: 1, color: Colors.white38),
-          ),
+            Positioned(
+              left: width * .12,
+              right: width * .12,
+              top: height * .12,
+              child: Text(
+                book.author.toUpperCase(),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: .72),
+                  fontSize: width * .065,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: .5,
+                ),
+              ),
+            ),
+            Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: width * .08),
+                child: Text(
+                  book.coverMark,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontFamily: 'Georgia',
+                    fontSize: width * .18,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1,
+                    shadows: const [
+                      Shadow(color: Colors.black38, blurRadius: 8),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: width * .16,
+              right: width * .16,
+              bottom: height * .1,
+              child: Container(height: 1, color: Colors.white38),
+            ),
+          ],
         ],
       ),
     );
