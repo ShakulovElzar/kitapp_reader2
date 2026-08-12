@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { ReaderGuard, type TokenPayload } from '../auth/token.guard.js';
-import { BookAccessDto } from './public.dto.js';
+import { BookAccessDto, ReadingProgressDto } from './public.dto.js';
 import { PublicService } from './public.service.js';
 
 type ReaderRequest = Request & { auth: TokenPayload };
@@ -41,5 +41,17 @@ export class PublicController {
   @UseGuards(ReaderGuard)
   file(@Param('id') id: string, @Req() req: ReaderRequest) {
     return this.service.readerFile(req.auth.sub, id);
+  }
+
+  @Post('reader/progress')
+  @UseGuards(ReaderGuard)
+  progress(@Body() dto: ReadingProgressDto, @Req() req: ReaderRequest) {
+    return this.service.saveProgress(req.auth.sub, dto);
+  }
+
+  @Get('reader/recent')
+  @UseGuards(ReaderGuard)
+  recent(@Req() req: ReaderRequest) {
+    return this.service.recent(req.auth.sub);
   }
 }

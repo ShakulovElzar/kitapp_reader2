@@ -189,15 +189,27 @@ function BooksPage() {
   async function save(event: FormEvent) {
     event.preventDefault(); setMessage('');
     try {
-      const payload = { ...form, rentalPrice: form.rentalPrice || undefined };
-      const book = await api<Book>(editing ? `/admin/books/${editing}` : '/admin/books', {
-        method: editing ? 'PATCH' : 'POST', body: JSON.stringify(payload),
-      });
-      if (cover || epub) {
+      if (!editing && (!cover || !epub)) throw new Error('Жаңы китепке мукаба жана EPUB милдеттүү');
+      const payload = {
+        ...form,
+        price: form.accessType === 'FREE' ? 0 : form.price,
+        rentalPrice: form.accessType === 'RENTAL' ? form.rentalPrice : undefined,
+        rentalDays: form.accessType === 'RENTAL' ? form.rentalDays : undefined,
+      };
+      if (!editing) {
         const files = new FormData();
-        if (cover) files.append('cover', cover);
-        if (epub) files.append('epub', epub);
-        await api(`/admin/books/${book.id}/files`, { method: 'POST', body: files });
+        files.append('data', JSON.stringify(payload));
+        files.append('cover', cover!);
+        files.append('epub', epub!);
+        await api('/admin/books-with-files', { method: 'POST', body: files });
+      } else {
+        await api<Book>(`/admin/books/${editing}`, { method: 'PATCH', body: JSON.stringify(payload) });
+        if (cover || epub) {
+          const files = new FormData();
+          if (cover) files.append('cover', cover);
+          if (epub) files.append('epub', epub);
+          await api(`/admin/books/${editing}/files`, { method: 'POST', body: files });
+        }
       }
       setOpen(false); await load();
     } catch (value) { setMessage(value instanceof Error ? value.message : 'Сакталган жок'); }
@@ -224,12 +236,14 @@ function BooksPage() {
             <Field label="URL белгиси"><input value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} required /></Field>
             <Field label="Автор"><select value={form.authorId} onChange={(e) => setForm({ ...form, authorId: e.target.value })} required><option value="">Тандаңыз</option>{authors.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></Field>
             <Field label="Категория"><select value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })} required><option value="">Тандаңыз</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
-            <Field label="Баасы"><input type="number" min="0" value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} /></Field>
-            <Field label="Ижара баасы"><input type="number" min="0" value={form.rentalPrice} onChange={(e) => setForm({ ...form, rentalPrice: Number(e.target.value) })} /></Field>
+            <Field label="Жеткиликтүүлүк"><select value={form.accessType} onChange={(e) => setForm({ ...form, accessType: e.target.value as Book['accessType'] })}><option value="FREE">Акысыз</option><option value="PURCHASE">Сатып алуу</option><option value="RENTAL">Ижара</option></select></Field>
+            {form.accessType !== 'FREE' && <Field label="Баасы"><input type="number" min="0" value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} required /></Field>}
+            {form.accessType === 'RENTAL' && <Field label="Ижара баасы"><input type="number" min="1" value={form.rentalPrice} onChange={(e) => setForm({ ...form, rentalPrice: Number(e.target.value) })} required /></Field>}
+            {form.accessType === 'RENTAL' && <Field label="Ижара мөөнөтү (күн)"><input type="number" min="1" value={form.rentalDays} onChange={(e) => setForm({ ...form, rentalDays: Number(e.target.value) })} required /></Field>}
             <Field label="Беттер"><input type="number" min="1" value={form.pages} onChange={(e) => setForm({ ...form, pages: Number(e.target.value) })} /></Field>
             <Field label="Статус"><select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as Book['status'] })}><option value="DRAFT">Долбоор</option><option value="PUBLISHED">Жарыяланган</option></select></Field>
-            <Field label="Мукаба"><input type="file" accept="image/*" onChange={(e) => setCover(e.target.files?.[0] ?? null)} /></Field>
-            <Field label="EPUB"><input type="file" accept=".epub,application/epub+zip" onChange={(e) => setEpub(e.target.files?.[0] ?? null)} /></Field>
+            <Field label={`Мукаба${editing ? '' : ' *'}`}><input type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" onChange={(e) => setCover(e.target.files?.[0] ?? null)} required={!editing} /></Field>
+            <Field label={`EPUB${editing ? '' : ' *'}`}><input type="file" accept=".epub,application/epub+zip" onChange={(e) => setEpub(e.target.files?.[0] ?? null)} required={!editing} /></Field>
             <Field label="Сүрөттөмө" wide><textarea rows={4} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} required /></Field>
             <label className="check"><input type="checkbox" checked={form.isNew} onChange={(e) => setForm({ ...form, isNew: e.target.checked })} /> Жаңы китеп</label>
             <label className="check"><input type="checkbox" checked={form.isAdult} onChange={(e) => setForm({ ...form, isAdult: e.target.checked })} /> 18+ мазмун</label>

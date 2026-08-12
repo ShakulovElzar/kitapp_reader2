@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -14,6 +15,8 @@ import {
 } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import type { Request } from 'express';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
 import { AdminGuard, type TokenPayload } from '../auth/token.guard.js';
 import {
   BlockReaderDto,
@@ -78,6 +81,26 @@ export class AdminController {
   @Post('books')
   createBook(@Body() dto: CreateBookDto, @Req() req: AdminRequest) {
     return this.service.createBook(dto, req.auth.sub);
+  }
+
+  @Post('books-with-files')
+  @UseInterceptors(
+    FileFieldsInterceptor([
+      { name: 'cover', maxCount: 1 },
+      { name: 'epub', maxCount: 1 },
+    ], { limits: { fileSize: 50 * 1024 * 1024 } }),
+  )
+  async createBookWithFiles(
+    @Body('data') data: string,
+    @UploadedFiles() files: { cover?: Express.Multer.File[]; epub?: Express.Multer.File[] },
+    @Req() req: AdminRequest,
+  ) {
+    let value: unknown;
+    try { value = JSON.parse(data); } catch { throw new BadRequestException('Китептин маалыматы туура эмес'); }
+    const dto = plainToInstance(CreateBookDto, value);
+    const errors = await validate(dto, { whitelist: true });
+    if (errors.length) throw new BadRequestException('Милдеттүү талааларды туура толтуруңуз');
+    return this.service.createBookWithFiles(dto, files, req.auth.sub);
   }
 
   @Patch('books/:id')

@@ -35,6 +35,11 @@ export class AuthService {
 
   async requestOtp(dto: RequestOtpDto) {
     const phone = this.normalizePhone(dto.phone);
+    const recent = await this.prisma.otpCode.findFirst({
+      where: { phone, createdAt: { gt: new Date(Date.now() - 60 * 1000) } },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (recent) throw new BadRequestException('Кодду кайра 60 секунддан кийин сураңыз');
     const code = process.env.OTP_MODE === 'local' ? '111111' : this.randomCode();
     const codeHash = await bcrypt.hash(code, 10);
     const reader = await this.prisma.reader.findUnique({ where: { phone } });

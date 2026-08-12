@@ -1,12 +1,18 @@
 {
   "name": "kitapp",
   "private": true,
-  "workspaces": ["server", "admin"],
+  "workspaces": [
+    "server",
+    "admin"
+  ],
   "scripts": {
     "dev:server": "npm --workspace server run start:dev",
     "dev:admin": "npm --workspace admin run dev",
     "build:server": "npm --workspace server run build",
     "build:admin": "npm --workspace admin run build",
     "check": "npm run build:server && npm run build:admin"
+  },
+  "devDependencies": {
+    "playwright": "^1.62.1"
   }
 }

@@ -1,11 +1,13 @@
 const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
+const path = require('node:path');
 
 const baseUrl = process.env.KITAPP_API_URL || 'http://127.0.0.1:3000/api';
 
 async function request(path, { token, ...init } = {}) {
   const headers = new Headers(init.headers);
   if (token) headers.set('Authorization', `Bearer ${token}`);
-  if (init.body) headers.set('Content-Type', 'application/json');
+  if (init.body && !(init.body instanceof FormData)) headers.set('Content-Type', 'application/json');
   const response = await fetch(`${baseUrl}${path}`, { ...init, headers });
   const body = await response.json().catch(() => null);
   assert.ok(response.ok, `${init.method || 'GET'} ${path}: ${JSON.stringify(body)}`);
@@ -13,6 +15,8 @@ async function request(path, { token, ...init } = {}) {
 }
 
 (async () => {
+  const suffix = Date.now().toString(36);
+  const phone = `0555${String(Date.now()).slice(-6)}`;
   const login = await request('/auth/admin/login', {
     method: 'POST',
     body: JSON.stringify({ email: 'admin@kitapp.kg', password: 'Kitapp123!' }),
@@ -34,21 +38,21 @@ async function request(path, { token, ...init } = {}) {
 
   const otp = await request('/auth/phone/request-otp', {
     method: 'POST',
-    body: JSON.stringify({ phone: '0555123456' }),
+    body: JSON.stringify({ phone }),
   });
   assert.equal(otp.developmentCode, '111111');
   const reader = await request('/auth/phone/verify-otp', {
     method: 'POST',
-    body: JSON.stringify({ phone: '0555123456', code: '111111' }),
+    body: JSON.stringify({ phone, code: '111111' }),
   });
   assert.ok(reader.token);
   console.log('PASS phone-only reader authentication');
 
   const catalog = await request('/catalog/books');
-  assert.ok(catalog.length >= 16);
-  console.log('PASS published catalog');
+  assert.ok(Array.isArray(catalog));
+  assert.ok(catalog.every((item) => item.coverUrl && item.epubKey));
+  console.log('PASS catalog excludes incomplete published books');
 
-  const suffix = Date.now().toString(36);
   let author;
   let category;
   let book;
@@ -79,13 +83,54 @@ async function request(path, { token, ...init } = {}) {
         status: 'DRAFT',
       }),
     });
-    const published = await request(`/admin/books/${book.id}`, {
+    const publishWithoutFiles = await fetch(`${baseUrl}/admin/books/${book.id}`, {
+      headers: {
+        Authorization: `Bearer ${login.token}`,
+        'Content-Type': 'application/json',
+      },
       token: login.token,
       method: 'PATCH',
       body: JSON.stringify({ status: 'PUBLISHED' }),
     });
-    assert.equal(published.status, 'PUBLISHED');
-    console.log('PASS catalog CRUD and publishing');
+    assert.equal(publishWithoutFiles.status, 400);
+    console.log('PASS publishing without files is rejected');
+
+    await request(`/admin/books/${book.id}`, { token: login.token, method: 'DELETE' });
+    book = undefined;
+
+    const coverPath = path.resolve(__dirname, '../web/books/test/OPS/images/i_001.png');
+    const epubPath = path.resolve(__dirname, '../assets/books/test.epub');
+    const form = new FormData();
+    form.set('data', JSON.stringify({
+      title: `QA EPUB ${suffix}`,
+      slug: `qa-epub-${suffix}`,
+      description: 'EPUB менен атомардык түзүлгөн QA китеби',
+      authorId: author.id,
+      categoryId: category.id,
+      price: 0,
+      pages: 100,
+      accessType: 'FREE',
+      status: 'PUBLISHED',
+    }));
+    form.set('cover', new Blob([await fs.readFile(coverPath)], { type: 'image/png' }), 'cover.png');
+    form.set('epub', new Blob([await fs.readFile(epubPath)], { type: 'application/epub+zip' }), 'book.epub');
+    book = await request('/admin/books-with-files', {
+      token: login.token,
+      method: 'POST',
+      body: form,
+    });
+    assert.equal(book.status, 'PUBLISHED');
+    assert.ok(book.coverKey && book.epubKey);
+    const catalogWithBook = await request('/catalog/books');
+    assert.ok(catalogWithBook.some((item) => item.id === book.id));
+    const file = await request(`/reader/books/${book.id}/file`, { token: reader.token });
+    const manifest = await fetch(file.manifestUrl).then((response) => {
+      assert.ok(response.ok, `GET manifest: ${response.status}`);
+      return response.json();
+    });
+    assert.ok(manifest.readingOrder.length > 0);
+    assert.ok(manifest.tableOfContents.length > 0);
+    console.log('PASS atomic EPUB upload, extraction and manifest');
   } finally {
     if (book) await request(`/admin/books/${book.id}`, { token: login.token, method: 'DELETE' });
     if (author) await request(`/admin/authors/${author.id}`, { token: login.token, method: 'DELETE' });

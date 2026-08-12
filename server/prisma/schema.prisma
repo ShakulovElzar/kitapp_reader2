@@ -54,6 +54,7 @@ model Reader {
   purchases Purchase[]
   rentals   Rental[]
   otpCodes  OtpCode[]
+  readingProgress ReadingProgress[]
 }
 
 model OtpCode {
@@ -116,6 +117,7 @@ model Book {
   deletedAt   DateTime?
   purchases   Purchase[]
   rentals     Rental[]
+  readingProgress ReadingProgress[]
 
   @@index([status, deletedAt])
   @@index([authorId])
@@ -168,4 +170,21 @@ model AuditLog {
   createdAt DateTime @default(now())
 
   @@index([createdAt])
+}
+
+model ReadingProgress {
+  id            String   @id @default(cuid())
+  readerId      String
+  reader        Reader   @relation(fields: [readerId], references: [id])
+  bookId        String
+  book          Book     @relation(fields: [bookId], references: [id])
+  locator       Json?
+  progression   Float    @default(0)
+  activeSeconds Int      @default(0)
+  lastReadAt    DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([readerId, bookId])
+  @@index([readerId, lastReadAt])
 }

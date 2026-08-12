@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Express } from 'express';
-import { BookStatus, PaymentStatus } from '../generated/prisma/enums.js';
+import { AccessType, BookStatus, PaymentStatus } from '../generated/prisma/enums.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import {
@@ -115,10 +115,14 @@ export class AdminService {
 
   async createBook(dto: CreateBookDto, adminId: string) {
     await Promise.all([this.requireAuthor(dto.authorId), this.requireCategory(dto.categoryId)]);
+    this.validateAccess(dto);
+    if (dto.status === BookStatus.PUBLISHED) {
+      throw new BadRequestException('Жарыялоо үчүн мукаба жана EPUB жүктөңүз');
+    }
     const book = await this.prisma.book.create({
       data: {
         ...dto,
-        publishedAt: dto.status === BookStatus.PUBLISHED ? new Date() : null,
+        publishedAt: null,
       },
       include: { author: true, category: true },
     });
@@ -126,10 +130,46 @@ export class AdminService {
     return book;
   }
 
+  async createBookWithFiles(
+    dto: CreateBookDto,
+    files: { cover?: Express.Multer.File[]; epub?: Express.Multer.File[] },
+    adminId: string,
+  ) {
+    const cover = files.cover?.[0];
+    const epub = files.epub?.[0];
+    if (!cover || !epub) throw new BadRequestException('Жаңы китепке мукаба жана EPUB милдеттүү');
+    await Promise.all([this.requireAuthor(dto.authorId), this.requireCategory(dto.categoryId)]);
+    this.validateAccess(dto);
+    let coverKey: string | undefined;
+    let epubKey: string | undefined;
+    try {
+      coverKey = await this.storage.upload('covers', cover);
+      epubKey = await this.storage.upload('epubs', epub);
+      const book = await this.prisma.book.create({
+        data: {
+          ...dto,
+          coverKey,
+          epubKey,
+          publishedAt: dto.status === BookStatus.PUBLISHED ? new Date() : null,
+        },
+        include: { author: true, category: true },
+      });
+      await this.audit(adminId, 'CREATE', 'Book', book.id, { title: book.title, files: true });
+      return book;
+    } catch (error) {
+      await Promise.all([this.storage.remove(coverKey), this.storage.remove(epubKey)]);
+      throw error;
+    }
+  }
+
   async updateBook(id: string, dto: UpdateBookDto, adminId: string) {
     const current = await this.requireBook(id);
     if (dto.authorId) await this.requireAuthor(dto.authorId);
     if (dto.categoryId) await this.requireCategory(dto.categoryId);
+    this.validateAccess({ ...current, ...dto });
+    if (dto.status === BookStatus.PUBLISHED && (!current.coverKey || !current.epubKey)) {
+      throw new BadRequestException('Жарыялоо үчүн мукаба жана EPUB жүктөңүз');
+    }
     const book = await this.prisma.book.update({
       where: { id },
       data: {
@@ -162,21 +202,26 @@ export class AdminService {
     files: { cover?: Express.Multer.File[]; epub?: Express.Multer.File[] },
     adminId: string,
   ) {
-    await this.requireBook(id);
-    const coverKey = files.cover?.[0]
-      ? await this.storage.upload('covers', files.cover[0])
-      : undefined;
-    const epubKey = files.epub?.[0]
-      ? await this.storage.upload('epubs', files.epub[0])
-      : undefined;
-    if (!coverKey && !epubKey) throw new BadRequestException('Файл тандалган жок');
-    const book = await this.prisma.book.update({
-      where: { id },
-      data: { coverKey, epubKey },
-      include: { author: true, category: true },
-    });
-    await this.audit(adminId, 'UPLOAD', 'Book', id, { coverKey, epubKey });
-    return book;
+    const current = await this.requireBook(id);
+    let coverKey: string | undefined;
+    let epubKey: string | undefined;
+    try {
+      coverKey = files.cover?.[0] ? await this.storage.upload('covers', files.cover[0]) : undefined;
+      epubKey = files.epub?.[0] ? await this.storage.upload('epubs', files.epub[0]) : undefined;
+      if (!coverKey && !epubKey) throw new BadRequestException('Файл тандалган жок');
+      const book = await this.prisma.book.update({
+        where: { id }, data: { coverKey, epubKey }, include: { author: true, category: true },
+      });
+      await Promise.all([
+        coverKey ? this.storage.remove(current.coverKey) : Promise.resolve(),
+        epubKey ? this.storage.remove(current.epubKey) : Promise.resolve(),
+      ]);
+      await this.audit(adminId, 'UPLOAD', 'Book', id, { coverKey, epubKey });
+      return book;
+    } catch (error) {
+      await Promise.all([this.storage.remove(coverKey), this.storage.remove(epubKey)]);
+      throw error;
+    }
   }
 
   listReaders() {
@@ -280,6 +325,20 @@ export class AdminService {
     const value = await this.prisma.book.findFirst({ where: { id, deletedAt: null } });
     if (!value) throw new NotFoundException('Китеп табылган жок');
     return value;
+  }
+
+  private validateAccess(dto: {
+    accessType?: AccessType;
+    price?: unknown;
+    rentalPrice?: unknown;
+    rentalDays?: number;
+  }) {
+    if (dto.accessType === AccessType.FREE && Number(dto.price ?? 0) !== 0) {
+      throw new BadRequestException('Акысыз китептин баасы 0 болушу керек');
+    }
+    if (dto.accessType === AccessType.RENTAL && (!dto.rentalPrice || !dto.rentalDays)) {
+      throw new BadRequestException('Ижара баасын жана мөөнөтүн көрсөтүңүз');
+    }
   }
 
   private audit(
