@@ -14,6 +14,16 @@ async function request(path, { token, ...init } = {}) {
   return body;
 }
 
+async function rejected(path, expectedStatus, init = {}) {
+  const headers = new Headers(init.headers);
+  if (init.token) headers.set('Authorization', `Bearer ${init.token}`);
+  if (init.body && !(init.body instanceof FormData)) headers.set('Content-Type', 'application/json');
+  const response = await fetch(`${baseUrl}${path}`, { ...init, headers });
+  const body = await response.json().catch(() => null);
+  assert.equal(response.status, expectedStatus, `${init.method || 'GET'} ${path}: ${JSON.stringify(body)}`);
+  return body;
+}
+
 (async () => {
   const suffix = Date.now().toString(36);
   const phone = `0555${String(Date.now()).slice(-6)}`;
@@ -41,6 +51,10 @@ async function request(path, { token, ...init } = {}) {
     body: JSON.stringify({ phone }),
   });
   assert.equal(otp.developmentCode, '111111');
+  await rejected('/auth/phone/verify-otp', 401, {
+    method: 'POST',
+    body: JSON.stringify({ phone, code: '000000' }),
+  });
   const reader = await request('/auth/phone/verify-otp', {
     method: 'POST',
     body: JSON.stringify({ phone, code: '111111' }),
@@ -129,8 +143,68 @@ async function request(path, { token, ...init } = {}) {
       return response.json();
     });
     assert.ok(manifest.readingOrder.length > 0);
-    assert.ok(manifest.tableOfContents.length > 0);
+    assert.equal(manifest.resources.length, manifest.readingOrder.length);
+    assert.ok(manifest.toc.length > 0);
     console.log('PASS atomic EPUB upload, extraction and manifest');
+
+    const duplicate = new FormData();
+    duplicate.set('data', JSON.stringify({
+      title: `QA EPUB duplicate ${suffix}`,
+      slug: `qa-epub-${suffix}`,
+      description: 'Кайталанган URL белгиси кабыл алынбашы керек',
+      authorId: author.id,
+      categoryId: category.id,
+      price: 0,
+      pages: 10,
+      accessType: 'FREE',
+      status: 'PUBLISHED',
+    }));
+    duplicate.set('cover', new Blob([await fs.readFile(coverPath)], { type: 'image/png' }), 'cover.png');
+    duplicate.set('epub', new Blob([await fs.readFile(epubPath)], { type: 'application/epub+zip' }), 'book.epub');
+    await rejected('/admin/books-with-files', 409, { token: login.token, method: 'POST', body: duplicate });
+    const duplicateMatches = (await request('/admin/books', { token: login.token }))
+      .filter((item) => item.slug === `qa-epub-${suffix}`);
+    assert.equal(duplicateMatches.length, 1);
+    console.log('PASS duplicate slug does not leave a partial book');
+
+    const invalid = new FormData();
+    invalid.set('data', JSON.stringify({
+      title: `QA invalid ${suffix}`,
+      slug: `qa-invalid-${suffix}`,
+      description: 'Жараксыз EPUB кабыл алынбашы керек',
+      authorId: author.id,
+      categoryId: category.id,
+      price: 0,
+      pages: 10,
+      accessType: 'FREE',
+      status: 'PUBLISHED',
+    }));
+    invalid.set('cover', new Blob([await fs.readFile(coverPath)], { type: 'image/png' }), 'cover.png');
+    invalid.set('epub', new Blob([Buffer.from('not-an-epub')], { type: 'application/epub+zip' }), 'invalid.epub');
+    await rejected('/admin/books-with-files', 400, { token: login.token, method: 'POST', body: invalid });
+    assert.ok(!(await request('/admin/books', { token: login.token })).some((item) => item.slug === `qa-invalid-${suffix}`));
+    console.log('PASS invalid EPUB leaves no partial book');
+
+    await request('/reader/progress', {
+      token: reader.token,
+      method: 'POST',
+      body: JSON.stringify({
+        bookId: book.id,
+        progression: 0.25,
+        activeSeconds: 120,
+        locator: { href: manifest.readingOrder[0].href, type: 'application/xhtml+xml' },
+      }),
+    });
+    const recent = await request('/reader/recent', { token: reader.token });
+    assert.equal(recent[0].book.id, book.id);
+    assert.equal(recent[0].activeSeconds, 120);
+    console.log('PASS two-minute reading appears in last-three list');
+
+    await request(`/admin/books/${book.id}`, { token: login.token, method: 'DELETE' });
+    const libraryAfterArchive = await request('/reader/library', { token: reader.token });
+    assert.ok(!libraryAfterArchive.some((item) => item.id === book.id));
+    book = undefined;
+    console.log('PASS archived book disappears from the reader library');
   } finally {
     if (book) await request(`/admin/books/${book.id}`, { token: login.token, method: 'DELETE' });
     if (author) await request(`/admin/authors/${author.id}`, { token: login.token, method: 'DELETE' });
