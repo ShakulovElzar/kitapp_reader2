@@ -5,12 +5,15 @@ class ContentsSheet extends StatefulWidget {
 
   final int currentIndex;
 
+  final List<int> chapterPages;
+
   final ValueChanged<int> onChapterTap;
 
   const ContentsSheet({
     super.key,
     required this.chapters,
     required this.currentIndex,
+    required this.chapterPages,
     required this.onChapterTap,
   });
 
@@ -50,6 +53,7 @@ class _ContentsSheetState extends State<ContentsSheet> {
   @override
   Widget build(BuildContext context) {
     return Container(
+      height: MediaQuery.of(context).size.height * 0.9,
       decoration: const BoxDecoration(
         color: Color(0xFFF6F2EC),
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
@@ -157,6 +161,16 @@ class _ContentsSheetState extends State<ContentsSheet> {
                             ),
                           ),
 
+                          if (index < widget.chapterPages.length) ...[
+                            Text(
+                              '${widget.chapterPages[index]}',
+                              style: const TextStyle(
+                                color: Color(0xFF8E775D),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                          ],
                           Icon(
                             isCurrent
                                 ? Icons.play_arrow_rounded

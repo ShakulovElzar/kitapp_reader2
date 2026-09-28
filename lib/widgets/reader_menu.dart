@@ -3,6 +3,16 @@ import 'package:flutter/material.dart';
 class ReaderMenu extends StatelessWidget {
   final int currentPage;
 
+  final int totalPages;
+
+  final bool canGoBack;
+
+  final bool canGoForward;
+
+  final VoidCallback onBackTap;
+
+  final VoidCallback onForwardTap;
+
   final bool showMenu;
 
   final double progress;
@@ -28,6 +38,11 @@ class ReaderMenu extends StatelessWidget {
     required this.showMenu,
     required this.progress,
     required this.currentPage,
+    required this.totalPages,
+    required this.canGoBack,
+    required this.canGoForward,
+    required this.onBackTap,
+    required this.onForwardTap,
     required this.onProgressChanged,
     required this.onProgressChangeEnd,
     required this.onSettingsTap,
@@ -107,10 +122,14 @@ class ReaderMenu extends StatelessWidget {
                           overlayColor: Colors.transparent,
                         ),
 
-                        child: Slider(
-                          value: progress.clamp(0.0, 1.0),
-                          onChanged: onProgressChanged,
-                          onChangeEnd: onProgressChangeEnd,
+                        child: Semantics(
+                          label: 'Барак шкаласы',
+                          value: '$currentPage / $totalPages',
+                          child: Slider(
+                            value: progress.clamp(0.0, 1.0),
+                            onChanged: onProgressChanged,
+                            onChangeEnd: onProgressChangeEnd,
+                          ),
                         ),
                       ),
                     ),
@@ -139,9 +158,26 @@ class ReaderMenu extends StatelessWidget {
 
                 const SizedBox(height: 2),
 
-                Text(
-                  '$currentPage-бет',
-                  style: const TextStyle(fontWeight: FontWeight.w400),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    IconButton(
+                      tooltip: 'Мурунку жерге кайтуу',
+                      onPressed: canGoBack ? onBackTap : null,
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.undo_rounded, size: 20),
+                    ),
+                    Text(
+                      '$currentPage / $totalPages-бет',
+                      style: const TextStyle(fontWeight: FontWeight.w400),
+                    ),
+                    IconButton(
+                      tooltip: 'Кийинки жерге өтүү',
+                      onPressed: canGoForward ? onForwardTap : null,
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.redo_rounded, size: 20),
+                    ),
+                  ],
                 ),
 
                 const SizedBox(height: 10),

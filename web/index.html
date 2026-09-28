@@ -49,6 +49,172 @@
   <script>
     (() => {
       let pointerStart = null;
+      let readerPreferences = null;
+      let readerSearch = null;
+
+      const readerDocument = () => {
+        const frame = document.querySelector('#container iframe');
+        try {
+          return frame?.contentDocument ?? null;
+        } catch (_) {
+          return null;
+        }
+      };
+
+      const applyPreferences = () => {
+        const content = readerDocument();
+        if (!content || !readerPreferences) return false;
+        const root = content.documentElement;
+        const body = content.body;
+        if (!root || !body) return false;
+        const values = readerPreferences;
+        let style = content.getElementById('kitapp-reader-preferences');
+        if (!style) {
+          style = content.createElement('style');
+          style.id = 'kitapp-reader-preferences';
+          content.head?.appendChild(style);
+        }
+        style.textContent = `
+          :root { font-size: ${values.fontSize}% !important; background: ${values.background} !important; }
+          html, body { background: ${values.background} !important; color: ${values.foreground} !important; }
+          body {
+            line-height: ${values.lineHeight} !important;
+            padding-left: ${values.margins}px !important;
+            padding-right: ${values.margins}px !important;
+            box-sizing: border-box !important;
+            overflow-wrap: ${values.wordWrap ? 'anywhere' : 'normal'} !important;
+            word-break: ${values.wordWrap ? 'normal' : 'keep-all'} !important;
+          }
+          body p, body li, body blockquote, body td, body dd, body dt {
+            font-size: 1rem !important;
+            line-height: ${values.lineHeight} !important;
+            color: ${values.foreground} !important;
+            overflow-wrap: ${values.wordWrap ? 'anywhere' : 'normal'} !important;
+          }
+          body h1, body h2, body h3, body h4, body h5, body h6,
+          body a, body span { color: ${values.foreground} !important; }
+          .kitapp-pagebreak { display: inline !important; width: 0 !important; height: 0 !important; }
+          mark[data-kitapp-search] { background: #ffe066 !important; color: #111 !important; border-radius: 2px; }
+          mark[data-kitapp-search-active] { background: #ff9f1c !important; outline: 2px solid #ff9f1c; }
+        `;
+        root.dataset.kitappFontSize = String(values.fontSize);
+        root.dataset.kitappTheme = values.theme;
+        root.dataset.kitappMargins = String(values.margins);
+        root.dataset.kitappLineHeight = String(values.lineHeight);
+        root.dataset.kitappWordWrap = String(values.wordWrap);
+        return true;
+      };
+
+      const clearSearch = () => {
+        const content = readerDocument();
+        if (!content) return;
+        for (const mark of [...content.querySelectorAll('mark[data-kitapp-search]')]) {
+          mark.replaceWith(content.createTextNode(mark.textContent ?? ''));
+        }
+        content.body?.normalize();
+      };
+
+      const highlightSearch = () => {
+        const content = readerDocument();
+        if (!content || !readerSearch?.query) return false;
+        clearSearch();
+        const query = readerSearch.query.toLocaleLowerCase();
+        const walker = content.createTreeWalker(
+          content.body,
+          NodeFilter.SHOW_TEXT,
+          { acceptNode: (node) => node.parentElement?.closest('script, style, mark')
+            ? NodeFilter.FILTER_REJECT
+            : NodeFilter.FILTER_ACCEPT },
+        );
+        const matches = [];
+        let node;
+        while ((node = walker.nextNode())) {
+          const text = node.nodeValue ?? '';
+          let from = 0;
+          let index;
+          while ((index = text.toLocaleLowerCase().indexOf(query, from)) >= 0) {
+            matches.push({ node, index });
+            from = index + Math.max(1, query.length);
+          }
+        }
+        if (!matches.length) return false;
+        const grouped = new Map();
+        for (const match of matches) {
+          if (!grouped.has(match.node)) grouped.set(match.node, []);
+          grouped.get(match.node).push(match.index);
+        }
+        const marks = [];
+        for (const [textNode, indexes] of grouped) {
+          const text = textNode.nodeValue ?? '';
+          const fragment = content.createDocumentFragment();
+          let cursor = 0;
+          for (const index of indexes) {
+            fragment.append(text.slice(cursor, index));
+            const mark = content.createElement('mark');
+            mark.dataset.kitappSearch = 'true';
+            mark.textContent = text.slice(index, index + readerSearch.query.length);
+            fragment.append(mark);
+            marks.push(mark);
+            cursor = index + readerSearch.query.length;
+          }
+          fragment.append(text.slice(cursor));
+          textNode.replaceWith(fragment);
+        }
+        const active = marks[Math.min(readerSearch.occurrence, marks.length - 1)];
+        active?.setAttribute('data-kitapp-search-active', 'true');
+        active?.scrollIntoView({ block: 'center', inline: 'center' });
+        return true;
+      };
+
+      const retryReaderAction = (action) => {
+        let attempts = 0;
+        const run = () => {
+          if (action() || attempts++ >= 20) return;
+          window.setTimeout(run, 100);
+        };
+        run();
+      };
+
+      window.kitappApplyReaderPreferences = (json) => {
+        readerPreferences = JSON.parse(json);
+        retryReaderAction(applyPreferences);
+      };
+
+      window.kitappGoToReaderFragment = (fragment) => {
+        retryReaderAction(() => {
+          const target = readerDocument()?.getElementById(fragment);
+          target?.scrollIntoView({ block: 'start', inline: 'start' });
+          return Boolean(target);
+        });
+      };
+
+      window.kitappHighlightReaderSearch = (query, occurrence) => {
+        readerSearch = { query, occurrence: Math.max(0, occurrence) };
+        retryReaderAction(highlightSearch);
+      };
+
+      window.kitappClearReaderSearch = () => {
+        readerSearch = null;
+        clearSearch();
+      };
+
+      const observeReaderFrame = () => {
+        const frame = document.querySelector('#container iframe');
+        if (!frame || frame.dataset.kitappObserved) return;
+        frame.dataset.kitappObserved = 'true';
+        frame.addEventListener('load', () => {
+          window.setTimeout(() => {
+            applyPreferences();
+            if (readerSearch) highlightSearch();
+          });
+        });
+        applyPreferences();
+      };
+      new MutationObserver(observeReaderFrame).observe(document.documentElement, {
+        childList: true,
+        subtree: true,
+      });
+      window.addEventListener('DOMContentLoaded', observeReaderFrame);
 
       window.addEventListener('pointerdown', (event) => {
         if (!document.querySelector('#container iframe')) return;

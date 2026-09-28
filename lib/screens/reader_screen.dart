@@ -15,6 +15,7 @@ import '../widgets/reader_menu.dart';
 import '../widgets/settings_sheet.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/reader_swipe_bridge.dart';
+import '../services/reader_content_bridge.dart';
 import '../widgets/contents_sheet.dart';
 import '../widgets/bookmarks_sheet.dart';
 import '../widgets/search_sheet.dart';
@@ -45,6 +46,12 @@ class _ReaderScreenState extends State<ReaderScreen>
 
   int _fontSize = 120;
 
+  double _pageMargins = 20;
+
+  double _lineHeight = 1.5;
+
+  bool _wordWrap = true;
+
   double _brightness = 1.0;
 
   double _sliderProgress = 0.0;
@@ -60,9 +67,17 @@ class _ReaderScreenState extends State<ReaderScreen>
 
   int _previewPage = 1;
 
+  List<Locator> _pageLocators = const [];
+
+  final List<Locator> _backHistory = [];
+
+  final List<Locator> _forwardHistory = [];
+
   String get _bookId => widget.book.id;
 
   String get _locatorKey => 'locator_$_bookId';
+
+  String get _pageKey => 'reader_page_$_bookId';
 
   String get _bookmarksKey => 'bookmarks_$_bookId';
 
@@ -130,6 +145,9 @@ class _ReaderScreenState extends State<ReaderScreen>
     final theme = prefs.getString('reader_theme') ?? 'sepia';
     _fontSize = prefs.getInt('reader_font_size') ?? 120;
     _brightness = prefs.getDouble('reader_brightness') ?? 1.0;
+    _pageMargins = prefs.getDouble('reader_page_margins') ?? 20;
+    _lineHeight = prefs.getDouble('reader_line_height') ?? 1.5;
+    _wordWrap = prefs.getBool('reader_word_wrap') ?? true;
     _selectedTheme = theme;
     if (theme == 'light') {
       _backgroundColor = Colors.white;
@@ -149,6 +167,9 @@ class _ReaderScreenState extends State<ReaderScreen>
       prefs.setInt('reader_font_size', _fontSize),
       prefs.setDouble('reader_brightness', _brightness),
       prefs.setString('reader_theme', _selectedTheme),
+      prefs.setDouble('reader_page_margins', _pageMargins),
+      prefs.setDouble('reader_line_height', _lineHeight),
+      prefs.setBool('reader_word_wrap', _wordWrap),
     ]);
   }
 
@@ -169,6 +190,28 @@ class _ReaderScreenState extends State<ReaderScreen>
           throw StateError('EPUB манифести жүктөлгөн жок');
         }
         final manifest = jsonDecode(response.body) as Map<String, dynamic>;
+        final pageLocators =
+            (manifest['pageList'] as List<dynamic>? ?? const [])
+                .map(
+                  (item) =>
+                      Locator.fromJson(Map<String, dynamic>.from(item as Map)),
+                )
+                .whereType<Locator>()
+                .map(_relativeLocator)
+                .toList();
+        final manifestToc = (manifest['toc'] as List<dynamic>? ?? const [])
+            .map((item) => Map<String, dynamic>.from(item as Map))
+            .where((item) => item['href'] is String)
+            .map(
+              (item) => Link(
+                href: item['href'] as String,
+                type: item['type'] as String? ?? 'application/xhtml+xml',
+                title: item['title'] as String?,
+              ),
+            )
+            .toList();
+        final prefs = await SharedPreferences.getInstance();
+        final savedPage = prefs.getInt(_pageKey);
 
         final links = manifest['links'] as List<dynamic>;
 
@@ -198,9 +241,21 @@ class _ReaderScreenState extends State<ReaderScreen>
           _publication = publication;
           _manifestUrl = manifestUrl;
           _initialLocator = savedLocator == null
-              ? null
+              ? (savedPage != null && pageLocators.isNotEmpty
+                    ? pageLocators[(savedPage - 1).clamp(
+                        0,
+                        pageLocators.length - 1,
+                      )]
+                    : null)
               : _relativeLocator(savedLocator);
-          _tableOfContents = publication.tableOfContents;
+          _tableOfContents = publication.tableOfContents.isNotEmpty
+              ? publication.tableOfContents
+              : manifestToc;
+          _pageLocators = pageLocators;
+          _totalPages = pageLocators.isEmpty ? 1 : pageLocators.length;
+          _currentPage = (savedPage ?? 1).clamp(1, _totalPages);
+          _previewPage = _currentPage;
+          _sliderProgress = _pageProgress(_currentPage);
         });
 
         return;
@@ -307,6 +362,96 @@ class _ReaderScreenState extends State<ReaderScreen>
     return Locator.fromJson(value)!;
   }
 
+  String _resourceHref(String href) {
+    final relative = _relativeHref(href).split('#').first;
+    return relative.replaceFirst(RegExp(r'^\./|^/'), '');
+  }
+
+  int _pageForHref(String href) {
+    if (_pageLocators.isEmpty) return 1;
+    final resource = _resourceHref(href);
+    final index = _pageLocators.indexWhere(
+      (candidate) => _resourceHref(candidate.href) == resource,
+    );
+    return index < 0 ? 1 : index + 1;
+  }
+
+  String? _locatorFragment(Locator locator) {
+    final uriFragment = Uri.tryParse(locator.href)?.fragment;
+    if (uriFragment != null && uriFragment.isNotEmpty) return uriFragment;
+    final fragments = locator.locations?.fragments;
+    return fragments == null || fragments.isEmpty ? null : fragments.first;
+  }
+
+  int _pageForLocator(Locator locator) {
+    if (_pageLocators.isEmpty) {
+      final position = locator.locations?.position;
+      return (position ?? 1).clamp(1, _totalPages);
+    }
+    final resource = _resourceHref(locator.href);
+    final progression = locator.locations?.progression ?? 0;
+    var best = -1;
+    for (var index = 0; index < _pageLocators.length; index++) {
+      final candidate = _pageLocators[index];
+      if (_resourceHref(candidate.href) != resource) continue;
+      best = index;
+      final candidateProgression = candidate.locations?.progression ?? 0;
+      if (candidateProgression > progression) {
+        return (index).clamp(1, _totalPages);
+      }
+    }
+    if (best >= 0) return best + 1;
+    final totalProgression = locator.locations?.totalProgression;
+    if (totalProgression != null) {
+      return (totalProgression * (_totalPages - 1)).round() + 1;
+    }
+    return _currentPage;
+  }
+
+  double _pageProgress(int page) {
+    if (_totalPages <= 1) return 0;
+    return (page - 1) / (_totalPages - 1);
+  }
+
+  Future<void> _navigateTo(
+    Locator locator, {
+    bool rememberHistory = true,
+    String? searchQuery,
+    int searchOccurrence = 0,
+  }) async {
+    if (rememberHistory && _currentLocator != null) {
+      _backHistory.add(_currentLocator!);
+      _forwardHistory.clear();
+    }
+    final target = _relativeLocator(locator);
+    await _flureadium.goToLocator(target);
+    await Future.delayed(const Duration(milliseconds: 180));
+    await _flureadium.goToLocator(target);
+    await Future.delayed(const Duration(milliseconds: 80));
+    goToReaderFragment(_locatorFragment(target));
+    if (searchQuery != null) {
+      highlightReaderSearch(searchQuery, searchOccurrence);
+    } else {
+      clearReaderSearchHighlight();
+    }
+    await _rememberLocator(target);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _goBackInReader() async {
+    if (_backHistory.isEmpty) return;
+    if (_currentLocator != null) _forwardHistory.add(_currentLocator!);
+    final target = _backHistory.removeLast();
+    await _navigateTo(target, rememberHistory: false);
+  }
+
+  Future<void> _goForwardInReader() async {
+    if (_forwardHistory.isEmpty) return;
+    if (_currentLocator != null) _backHistory.add(_currentLocator!);
+    final target = _forwardHistory.removeLast();
+    await _navigateTo(target, rememberHistory: false);
+  }
+
   void _subscribeToChannels() {
     _flureadium.onTextLocatorChanged.listen((locator) {
       debugPrint(
@@ -314,29 +459,21 @@ class _ReaderScreenState extends State<ReaderScreen>
         '${locator.locations?.fragments}',
       );
 
-      final progress = locator.locations?.totalProgression ?? 0.0;
+      final page = _pageForLocator(locator);
+      final progress = _pageLocators.isEmpty
+          ? locator.locations?.totalProgression ?? 0.0
+          : _pageProgress(page);
 
       if (!mounted) {
         return;
       }
 
-      _saveLocator(locator);
+      _saveLocator(locator, page: page);
       widget.onProgress?.call(progress);
-
-      final position = locator.locations?.position;
-
-      debugPrint(locator.json);
-
-      final progression = locator.locations?.totalProgression ?? 0.0;
 
       setState(() {
         _currentLocator = locator;
-
-        _currentPage = position ?? 1;
-
-        if (progression > 0) {
-          _totalPages = (_currentPage / progression).round();
-        }
+        _currentPage = page;
 
         if (_bookmarkMode) {
           _showMenu = false;
@@ -381,9 +518,10 @@ class _ReaderScreenState extends State<ReaderScreen>
 
     final bookmarks = prefs.getStringList(_bookmarksKey) ?? [];
 
-    final locatorJson = _currentLocator!.json;
-
-    final exists = bookmarks.contains(locatorJson);
+    final exists = bookmarks
+        .map(Locator.fromJsonString)
+        .whereType<Locator>()
+        .any((locator) => _pageForLocator(locator) == _currentPage);
 
     if (!mounted) {
       return;
@@ -403,12 +541,13 @@ class _ReaderScreenState extends State<ReaderScreen>
 
     final bookmarks = prefs.getStringList(_bookmarksKey) ?? [];
 
-    final locatorJson = _currentLocator!.json;
+    final existing = bookmarks.indexWhere((value) {
+      final locator = Locator.fromJsonString(value);
+      return locator != null && _pageForLocator(locator) == _currentPage;
+    });
 
-    final exists = bookmarks.contains(locatorJson);
-
-    if (exists) {
-      bookmarks.remove(locatorJson);
+    if (existing >= 0) {
+      final locatorJson = bookmarks.removeAt(existing);
 
       await prefs.setStringList(_bookmarksKey, bookmarks);
 
@@ -430,7 +569,15 @@ class _ReaderScreenState extends State<ReaderScreen>
       return;
     }
 
-    bookmarks.add(locatorJson);
+    final value = jsonDecode(_currentLocator!.json) as Map<String, dynamic>;
+    final locations = Map<String, dynamic>.from(
+      value['locations'] as Map? ?? const {},
+    );
+    locations['position'] = _currentPage;
+    locations['totalProgression'] = _pageProgress(_currentPage);
+    value['locations'] = locations;
+    final bookmark = Locator.fromJson(value)!;
+    bookmarks.add(bookmark.json);
 
     await prefs.setStringList(_bookmarksKey, bookmarks);
 
@@ -443,11 +590,12 @@ class _ReaderScreenState extends State<ReaderScreen>
     });
   }
 
-  Future<void> _saveLocator(Locator locator) async {
+  Future<void> _saveLocator(Locator locator, {int? page}) async {
     try {
       final prefs = await SharedPreferences.getInstance();
 
       await prefs.setString(_locatorKey, locator.json);
+      await prefs.setInt(_pageKey, page ?? _pageForLocator(locator));
 
       debugPrint('LOCATOR SAVED');
     } catch (e) {
@@ -476,8 +624,23 @@ class _ReaderScreenState extends State<ReaderScreen>
         backgroundColor: _backgroundColor,
 
         textColor: _textColor,
+        pageMargins: _pageMargins,
       ),
     );
+    applyReaderContentPreferences(
+      fontSize: _fontSize,
+      margins: _pageMargins,
+      lineHeight: _lineHeight,
+      wordWrap: _wordWrap,
+      background: _cssColor(_backgroundColor),
+      foreground: _cssColor(_textColor),
+      theme: _selectedTheme,
+    );
+  }
+
+  String _cssColor(Color color) {
+    final value = color.toARGB32().toRadixString(16).padLeft(8, '0');
+    return '#${value.substring(2)}';
   }
 
   Future<void> _increaseFont() async {
@@ -555,6 +718,28 @@ class _ReaderScreenState extends State<ReaderScreen>
     await _saveReaderPreferences();
   }
 
+  Future<void> _changeMargins(double delta) async {
+    setState(() {
+      _pageMargins = (_pageMargins + delta).clamp(8, 48).toDouble();
+    });
+    await _applyReaderStyle();
+    await _saveReaderPreferences();
+  }
+
+  Future<void> _changeLineHeight(double delta) async {
+    setState(() {
+      _lineHeight = (_lineHeight + delta).clamp(1.2, 2).toDouble();
+    });
+    await _applyReaderStyle();
+    await _saveReaderPreferences();
+  }
+
+  Future<void> _setWordWrap(bool value) async {
+    setState(() => _wordWrap = value);
+    await _applyReaderStyle();
+    await _saveReaderPreferences();
+  }
+
   void _startMenuTimer() {
     _menuTimer?.cancel();
   }
@@ -573,7 +758,6 @@ class _ReaderScreenState extends State<ReaderScreen>
 
   void _openContents() {
     _menuTimer?.cancel();
-
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -582,6 +766,9 @@ class _ReaderScreenState extends State<ReaderScreen>
       builder: (context) {
         return ContentsSheet(
           chapters: _tableOfContents.map((e) => e.title ?? 'Бөлүм').toList(),
+          chapterPages: _tableOfContents
+              .map((link) => _pageForHref(link.href))
+              .toList(),
 
           currentIndex: _tableOfContents.indexWhere((e) {
             final tocHref = e.href.split('#').first.replaceFirst('/', '');
@@ -608,14 +795,7 @@ class _ReaderScreenState extends State<ReaderScreen>
             );
 
             await Future.delayed(const Duration(milliseconds: 120));
-
-            final target = _relativeLocator(locator);
-            await _flureadium.goToLocator(target);
-
-            await Future.delayed(const Duration(milliseconds: 180));
-
-            await _flureadium.goToLocator(target);
-            await _rememberLocator(target);
+            await _navigateTo(locator);
           },
         );
       },
@@ -656,13 +836,7 @@ class _ReaderScreenState extends State<ReaderScreen>
 
             await Future.delayed(const Duration(milliseconds: 120));
 
-            final target = _relativeLocator(locator);
-            await _flureadium.goToLocator(target);
-
-            await Future.delayed(const Duration(milliseconds: 180));
-
-            await _flureadium.goToLocator(target);
-            await _rememberLocator(target);
+            await _navigateTo(locator);
 
             if (!mounted) {
               return;
@@ -708,6 +882,7 @@ class _ReaderScreenState extends State<ReaderScreen>
   }
 
   void _openSearch() {
+    if (_manifestUrl == null) return;
     _menuTimer?.cancel();
 
     showModalBottomSheet(
@@ -721,10 +896,12 @@ class _ReaderScreenState extends State<ReaderScreen>
           manifestUrl: _manifestUrl!,
           publication: _publication!,
 
-          onBookmarkTap: (locator) async {
-            final target = _relativeLocator(locator);
-            await _flureadium.goToLocator(target);
-            await _rememberLocator(target);
+          onResultTap: (locator, query, occurrence) async {
+            await _navigateTo(
+              locator,
+              searchQuery: query,
+              searchOccurrence: occurrence,
+            );
           },
         );
       },
@@ -772,6 +949,14 @@ class _ReaderScreenState extends State<ReaderScreen>
           selectedTheme: _selectedTheme,
           fontSize: _fontSize,
           brightness: _brightness,
+          pageMargins: _pageMargins,
+          lineHeight: _lineHeight,
+          wordWrap: _wordWrap,
+          onDecreaseMargins: () => _changeMargins(-4),
+          onIncreaseMargins: () => _changeMargins(4),
+          onDecreaseLineHeight: () => _changeLineHeight(-.1),
+          onIncreaseLineHeight: () => _changeLineHeight(.1),
+          onWordWrapChanged: _setWordWrap,
         );
       },
     ).then((_) {
@@ -874,6 +1059,14 @@ class _ReaderScreenState extends State<ReaderScreen>
                             );
 
                             await _applyReaderStyle();
+
+                            final restore = _initialLocator;
+                            if (restore != null) {
+                              await _navigateTo(
+                                restore,
+                                rememberHistory: false,
+                              );
+                            }
                           },
                         ),
                       ),
@@ -948,6 +1141,11 @@ class _ReaderScreenState extends State<ReaderScreen>
                         currentPage: _isDraggingSlider
                             ? _previewPage
                             : _currentPage,
+                        totalPages: _totalPages,
+                        canGoBack: _backHistory.isNotEmpty,
+                        canGoForward: _forwardHistory.isNotEmpty,
+                        onBackTap: () => unawaited(_goBackInReader()),
+                        onForwardTap: () => unawaited(_goForwardInReader()),
 
                         onProgressChanged: (value) {
                           _menuTimer?.cancel();
@@ -957,10 +1155,9 @@ class _ReaderScreenState extends State<ReaderScreen>
 
                             _sliderProgress = value;
 
-                            _previewPage = (value * _totalPages).round().clamp(
-                              1,
-                              _totalPages,
-                            );
+                            _previewPage = _totalPages <= 1
+                                ? 1
+                                : (value * (_totalPages - 1)).round() + 1;
                           });
                         },
                         isBookmarked: _isBookmarked,
@@ -970,32 +1167,20 @@ class _ReaderScreenState extends State<ReaderScreen>
                         },
 
                         onProgressChangeEnd: (value) async {
-                          final targetPosition = (value * _totalPages)
-                              .round()
-                              .clamp(1, _totalPages);
-
-                          final newLocator = Locator(
-                            href: '',
-
-                            type: 'application/xhtml+xml',
-
-                            locations: Locations(position: targetPosition),
-                          );
+                          final targetPosition = _totalPages <= 1
+                              ? 1
+                              : (value * (_totalPages - 1)).round() + 1;
 
                           debugPrint(
                             'TARGET POSITION → '
                             '$targetPosition',
                           );
 
-                          debugPrint(newLocator.json);
-
-                          await _flureadium.goToLocator(newLocator);
-
-                          await Future.delayed(
-                            const Duration(milliseconds: 180),
-                          );
-
-                          await _flureadium.goToLocator(newLocator);
+                          if (_pageLocators.isNotEmpty) {
+                            await _navigateTo(
+                              _pageLocators[targetPosition - 1],
+                            );
+                          }
 
                           if (!mounted) {
                             return;

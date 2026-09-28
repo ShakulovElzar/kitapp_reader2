@@ -113,6 +113,7 @@ class _BookmarksSheetState extends State<BookmarksSheet> {
         .where((item) => _title(item).toLowerCase().contains(query))
         .toList();
     return Container(
+      height: MediaQuery.of(context).size.height * 0.9,
       decoration: const BoxDecoration(
         color: Color(0xFFF6F2EC),
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
@@ -177,7 +178,15 @@ class _BookmarksSheetState extends State<BookmarksSheet> {
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
                             ),
-                            title: Text(_title(locator)),
+                            title: Semantics(
+                              button: true,
+                              label: 'Кыстарманы ачуу: ${_title(locator)}',
+                              onTap: () {
+                                Navigator.pop(context);
+                                widget.onBookmarkTap(locator);
+                              },
+                              child: Text(_title(locator)),
+                            ),
                             subtitle: Text(
                               '${locator.locations?.position ?? 1}-бет',
                             ),

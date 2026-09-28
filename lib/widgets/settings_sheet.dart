@@ -21,6 +21,22 @@ class SettingsSheet extends StatefulWidget {
 
   final double brightness;
 
+  final double pageMargins;
+
+  final double lineHeight;
+
+  final bool wordWrap;
+
+  final VoidCallback onDecreaseMargins;
+
+  final VoidCallback onIncreaseMargins;
+
+  final VoidCallback onDecreaseLineHeight;
+
+  final VoidCallback onIncreaseLineHeight;
+
+  final ValueChanged<bool> onWordWrapChanged;
+
   const SettingsSheet({
     super.key,
     required this.onDecreaseFont,
@@ -33,6 +49,14 @@ class SettingsSheet extends StatefulWidget {
     required this.selectedTheme,
     required this.fontSize,
     required this.brightness,
+    required this.pageMargins,
+    required this.lineHeight,
+    required this.wordWrap,
+    required this.onDecreaseMargins,
+    required this.onIncreaseMargins,
+    required this.onDecreaseLineHeight,
+    required this.onIncreaseLineHeight,
+    required this.onWordWrapChanged,
   });
 
   @override
@@ -43,6 +67,9 @@ class _SettingsSheetState extends State<SettingsSheet> {
   late String _selectedTheme;
   late int _fontSize;
   late double _brightness;
+  late double _pageMargins;
+  late double _lineHeight;
+  late bool _wordWrap;
 
   @override
   void initState() {
@@ -51,12 +78,15 @@ class _SettingsSheetState extends State<SettingsSheet> {
     _selectedTheme = widget.selectedTheme;
     _fontSize = widget.fontSize;
     _brightness = widget.brightness;
+    _pageMargins = widget.pageMargins;
+    _lineHeight = widget.lineHeight;
+    _wordWrap = widget.wordWrap;
   }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: MediaQuery.of(context).size.height * 0.58,
+      height: MediaQuery.of(context).size.height * 0.78,
       decoration: const BoxDecoration(
         color: Color(0xFFF6F2EC),
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
@@ -132,6 +162,54 @@ class _SettingsSheetState extends State<SettingsSheet> {
             ),
 
             const SizedBox(height: 18),
+
+            _settingRow(
+              icon: Icons.space_bar,
+              title: 'Талаалар',
+              value: '${_pageMargins.round()} px',
+              onMinus: widget.onDecreaseMargins,
+              onPlus: widget.onIncreaseMargins,
+              onLocalMinus: () =>
+                  _pageMargins = (_pageMargins - 4).clamp(8, 48).toDouble(),
+              onLocalPlus: () =>
+                  _pageMargins = (_pageMargins + 4).clamp(8, 48).toDouble(),
+            ),
+
+            const SizedBox(height: 12),
+
+            _settingRow(
+              icon: Icons.format_line_spacing,
+              title: 'Сап аралыгы',
+              value: _lineHeight.toStringAsFixed(1),
+              onMinus: widget.onDecreaseLineHeight,
+              onPlus: widget.onIncreaseLineHeight,
+              onLocalMinus: () =>
+                  _lineHeight = (_lineHeight - .1).clamp(1.2, 2).toDouble(),
+              onLocalPlus: () =>
+                  _lineHeight = (_lineHeight + .1).clamp(1.2, 2).toDouble(),
+            ),
+
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Material(
+                color: Colors.transparent,
+                child: SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  secondary: const Icon(Icons.wrap_text, size: 20),
+                  title: const Text(
+                    'Сөздөрдү ташуу',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                  ),
+                  value: _wordWrap,
+                  onChanged: (value) {
+                    widget.onWordWrapChanged(value);
+                    setState(() => _wordWrap = value);
+                  },
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 4),
 
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 20),

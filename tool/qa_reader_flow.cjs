@@ -22,11 +22,28 @@ async function storageContains(page, value) {
   );
 }
 
+async function storageHasKey(page, value) {
+  return page.evaluate(
+    (expected) => Object.keys(localStorage).some((key) => key.includes(expected)),
+    value,
+  );
+}
+
 async function savedLocator(page, bookId) {
   return page.evaluate(
     (id) =>
       Object.entries(localStorage).find(([key]) =>
         key.includes(`locator_${id}`),
+      )?.[1] ?? null,
+    bookId,
+  );
+}
+
+async function savedStablePage(page, bookId) {
+  return page.evaluate(
+    (id) =>
+      Object.entries(localStorage).find(([key]) =>
+        key.includes(`reader_page_${id}`),
       )?.[1] ?? null,
     bookId,
   );
@@ -39,6 +56,46 @@ async function openReaderMenu(page) {
     await enableFlutterAccessibility(page);
   }
   await page.getByText('Жөндөө', { exact: true }).waitFor({ state: 'visible' });
+}
+
+async function readerFrameDiagnostics(page) {
+  return Promise.all(
+    page.frames().map(async (frame) => {
+      try {
+        return await frame.evaluate(() => {
+          const target = document.querySelector('p') || document.body;
+          const style = target ? getComputedStyle(target) : null;
+          const root = getComputedStyle(document.documentElement);
+          return {
+            url: location.href,
+            fontSize: style?.fontSize ?? null,
+            rootFontSize: root.fontSize,
+            bodyFontSize: getComputedStyle(document.body).fontSize,
+            lineHeight: style?.lineHeight ?? null,
+            color: style?.color ?? null,
+            background: getComputedStyle(document.body).backgroundColor,
+            userFontSize: root.getPropertyValue('--USER__fontSize'),
+            userBackground: root.getPropertyValue('--USER__backgroundColor'),
+            kitappFontSize: document.documentElement.dataset.kitappFontSize ?? null,
+            kitappTheme: document.documentElement.dataset.kitappTheme ?? null,
+          };
+        });
+      } catch (error) {
+        return { url: frame.url(), error: error.message };
+      }
+    }),
+  );
+}
+
+async function readerSearchDiagnostics(page) {
+  for (const frame of page.frames()) {
+    if (!frame.url().startsWith('blob:')) continue;
+    return frame.evaluate(() => ({
+      matches: document.querySelectorAll('mark[data-kitapp-search]').length,
+      active: document.querySelectorAll('mark[data-kitapp-search-active]').length,
+    }));
+  }
+  return { matches: 0, active: 0 };
 }
 
 async function openReader(page) {
@@ -55,10 +112,16 @@ async function openReader(page) {
     await page.getByText('Жаңы болуп чыкты', { exact: true }).waitFor();
   }
 
-  await page
+  const alice = page
     .getByRole('button', { name: /Алиса кереметтер өлкөсүндө/ })
-    .first()
-    .click();
+    .first();
+  try {
+    await alice.waitFor({ state: 'visible', timeout: 15000 });
+  } catch (error) {
+    await page.screenshot({ path: '/tmp/kitapp-catalog-timeout.png', fullPage: true });
+    throw error;
+  }
+  await alice.click();
 
   await page
     .getByRole('button', { name: /Окууну (баштоо|улантуу)/ })
@@ -190,9 +253,11 @@ async function openReader(page) {
       await page.mouse.click(240, 450);
       await page.waitForTimeout(250);
       await enableFlutterAccessibility(page);
+      const publicationView = page.locator('[aria-label="Publication"]');
 
       await page.getByText('Жөндөө', { exact: true }).click();
       await page.getByText('Горизонталдуу', { exact: true }).waitFor();
+      const readerBeforeFont = await publicationView.screenshot();
       const fontDown = page.getByRole('button', {
         name: 'Текст өлчөмү азайтуу',
       });
@@ -203,6 +268,21 @@ async function openReader(page) {
       await page.getByText('80%', { exact: true }).waitFor();
       for (let index = 0; index < 11; index++) await fontUp.click();
       await page.getByText('180%', { exact: true }).waitFor();
+      await page.waitForTimeout(500);
+      const readerAfterFont = await publicationView.screenshot();
+      const readerStylesAfterFont = await readerFrameDiagnostics(page);
+      const contentStyleAfterFont = readerStylesAfterFont.find((item) =>
+        item.url.startsWith('blob:'),
+      );
+      assert.ok(
+        !readerAfterFont.equals(readerBeforeFont),
+        'font controls must visibly reflow the EPUB content',
+      );
+      assert.equal(
+        contentStyleAfterFont?.kitappFontSize,
+        '180',
+        'font controls must apply to the EPUB document, not only to the settings label',
+      );
 
       const brightnessDown = page.getByRole('button', {
         name: 'Жарыктыгы азайтуу',
@@ -224,14 +304,38 @@ async function openReader(page) {
       await page.getByText('Түнкү', { exact: true }).click();
       await page.waitForTimeout(100);
       assert.ok(await storageContains(page, 'dark'), 'dark theme must persist');
+      const readerStylesAfterTheme = await readerFrameDiagnostics(page);
+      assert.equal(
+        readerStylesAfterTheme.find((item) => item.url.startsWith('blob:'))?.kitappTheme,
+        'dark',
+        'theme controls must apply to the EPUB document',
+      );
       await page.getByRole('button', { name: 'Артка', exact: true }).click();
       await page.getByText('Жөндөө', { exact: true }).waitFor();
       console.log('PASS settings enforce bounds, persist all themes, and restore menu');
 
-      const publicationView = page.locator('[aria-label="Publication"]');
+      const beforeSlider = await publicationView.screenshot();
+      const slider = page.getByRole('slider').first();
+      const sliderBox = await slider.boundingBox();
+      assert.ok(sliderBox, 'page slider must be visible');
+      await page.mouse.click(
+        sliderBox.x + sliderBox.width * 0.7,
+        sliderBox.y + sliderBox.height / 2,
+      );
+      await page.waitForTimeout(1000);
+      const afterSlider = await publicationView.screenshot();
+      assert.ok(!afterSlider.equals(beforeSlider), 'page slider must navigate to another stable page');
+      assert.ok(
+        await storageHasKey(page, `reader_page_${readerBookId}`),
+        'page slider result must persist the stable page number',
+      );
+      console.log('PASS stable page slider navigates and persists its page');
+
       const beforeChapter = await publicationView.screenshot();
       await page.getByText('Мазмуну', { exact: true }).click();
-      const chapter = page.getByText('CHAPTER VI. Pig and Pepper', { exact: true });
+      await page.waitForTimeout(200);
+      await enableFlutterAccessibility(page);
+      const chapter = page.getByText(/CHAPTER VI\. Pig and Pepper/);
       await chapter.waitFor({ state: 'visible' });
       await chapter.click();
       await page.waitForTimeout(900);
@@ -256,8 +360,21 @@ async function openReader(page) {
       const searchResult = page.getByText(/White Rabbit/i).last();
       await searchResult.waitFor({ state: 'visible', timeout: 15000 });
       await searchResult.click();
+      await page.waitForTimeout(500);
+      const highlight = await readerSearchDiagnostics(page);
+      assert.ok(highlight.matches > 0, 'search must highlight matching text inside the EPUB');
+      assert.equal(highlight.active, 1, 'search must mark the selected occurrence as active');
+      await page.getByRole('button', { name: 'Мурунку жерге кайтуу' }).click();
+      await page.waitForTimeout(500);
+      assert.equal(
+        (await readerSearchDiagnostics(page)).matches,
+        0,
+        'back navigation must clear search highlighting and restore the previous place',
+      );
+      await page.getByRole('button', { name: 'Кийинки жерге өтүү' }).click();
+      await page.waitForTimeout(500);
       await page.getByRole('button', { name: 'Кыстарма кошуу' }).click();
-      console.log('PASS empty search state and full-text result navigation');
+      console.log('PASS search highlighting, back/forward history, and result navigation');
 
       await page.getByText('Кыстармалар', { exact: true }).click();
       await page.getByText('Кыстармалар жок', { exact: true }).waitFor({ state: 'hidden' });
@@ -280,10 +397,6 @@ async function openReader(page) {
       await page.getByText('Издөө', { exact: true }).click();
       await page.getByRole('textbox', { name: /Китептин текстинен издөө/ }).waitFor();
       const recentChip = page.getByRole('button', { name: 'Акыркы издөө: White Rabbit', exact: true });
-      if (!(await recentChip.count())) {
-        console.error(`SEARCH SCREEN: ${await page.locator('body').innerText()}`);
-        console.error(`SEARCH STORAGE: ${JSON.stringify(await page.evaluate(() => Object.fromEntries(Object.entries(localStorage).filter(([key]) => key.includes('search')))))}`);
-      }
       await recentChip.waitFor({ state: 'visible' });
       await recentChip.click();
       await page.getByText(/White Rabbit/i).last().waitFor({ state: 'visible', timeout: 15000 });
@@ -301,7 +414,12 @@ async function openReader(page) {
       );
       await openReaderMenu(page);
       await page.getByText('Кыстармалар', { exact: true }).click();
-      await page.getByText('QA кыстарма', { exact: true }).click();
+      await page.waitForTimeout(200);
+      await enableFlutterAccessibility(page);
+      const savedBookmark = page.getByRole('button', {
+        name: /Кыстарманы ачуу: QA кыстарма/,
+      });
+      await savedBookmark.click();
       await page.waitForTimeout(900);
       const afterBookmarkJump = await publicationView.screenshot();
       assert.ok(
@@ -322,8 +440,9 @@ async function openReader(page) {
       await page.getByText(/^CHAPTER X\./).click();
       await page.waitForTimeout(1200);
       const restoreTarget = await savedLocator(page, readerBookId);
-      const restoreTargetPage = await publicationView.screenshot();
+      const restoreStablePage = await savedStablePage(page, readerBookId);
       assert.ok(restoreTarget, 'current locator must be persisted locally');
+      assert.ok(restoreStablePage, 'stable page number must be persisted locally');
       await openReaderMenu(page);
       await page.getByText('Чыгуу', { exact: true }).click();
       await page.getByText('Кыскача маалымат', { exact: true }).waitFor();
@@ -334,11 +453,14 @@ async function openReader(page) {
       await page.waitForTimeout(1200);
       const restored = await savedLocator(page, readerBookId);
       assert.equal(restored, restoreTarget, 'reader must restore the saved locator');
-      const restoredPage = await publicationView.screenshot();
-      assert.ok(
-        restoredPage.equals(restoreTargetPage),
-        'reader must restore the same visible page',
+      assert.equal(
+        await savedStablePage(page, readerBookId),
+        restoreStablePage,
+        'reader must preserve the same stable page number',
       );
+      await openReaderMenu(page);
+      const stablePageNumber = Number(JSON.parse(restoreStablePage));
+      await page.getByText(`${stablePageNumber} / 90-бет`, { exact: true }).waitFor();
       console.log('PASS saved progress restores after closing and reopening reader');
 
       if (process.env.KITAPP_LONG_QA === '1') {

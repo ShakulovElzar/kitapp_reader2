@@ -12,13 +12,14 @@ class SearchSheet extends StatefulWidget {
     required this.bookId,
     required this.manifestUrl,
     required this.publication,
-    required this.onBookmarkTap,
+    required this.onResultTap,
   });
 
   final String bookId;
   final String manifestUrl;
   final Publication publication;
-  final ValueChanged<Locator> onBookmarkTap;
+  final void Function(Locator locator, String query, int occurrence)
+  onResultTap;
 
   @override
   State<SearchSheet> createState() => _SearchSheetState();
@@ -53,7 +54,7 @@ class _SearchSheetState extends State<SearchSheet> {
     final updated = [
       query,
       ..._recent.where((item) => item != query),
-    ].take(5).toList();
+    ].take(10).toList();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList(_recentKey, updated);
     if (mounted) setState(() => _recent = updated);
@@ -96,19 +97,33 @@ class _SearchSheetState extends State<SearchSheet> {
               '';
           _chapterText[link.href] = text;
         }
-        final match = text.toLowerCase().indexOf(normalized);
-        if (match < 0) continue;
-        final start = (match - 55).clamp(0, text.length);
-        final end = (match + query.length + 95).clamp(0, text.length);
-        final locator = widget.publication.locatorFromLink(link);
-        if (locator != null) {
+        var match = text.toLowerCase().indexOf(normalized);
+        var occurrence = 0;
+        while (match >= 0 && results.length < 100) {
+          final start = (match - 55).clamp(0, text.length);
+          final end = (match + query.length + 95).clamp(0, text.length);
+          final locator = Locator(
+            href: link.href,
+            type: link.type ?? 'application/xhtml+xml',
+            title: link.title,
+            locations: Locations(
+              progression: text.isEmpty ? 0 : match / text.length,
+            ),
+          );
           results.add(
             _SearchResult(
               snippet:
                   '${start > 0 ? '…' : ''}${text.substring(start, end)}${end < text.length ? '…' : ''}',
               chapter: link.title ?? '${index + 1}-бөлүм',
               locator: locator,
+              query: query,
+              occurrence: occurrence,
             ),
+          );
+          occurrence++;
+          match = text.toLowerCase().indexOf(
+            normalized,
+            match + normalized.length,
           );
         }
         if (results.length >= 50) break;
@@ -129,6 +144,12 @@ class _SearchSheetState extends State<SearchSheet> {
     _search(query);
   }
 
+  Future<void> _clearRecent() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_recentKey);
+    if (mounted) setState(() => _recent = const []);
+  }
+
   @override
   void dispose() {
     _debounce?.cancel();
@@ -140,6 +161,7 @@ class _SearchSheetState extends State<SearchSheet> {
   @override
   Widget build(BuildContext context) {
     return Container(
+      height: MediaQuery.of(context).size.height * 0.9,
       decoration: const BoxDecoration(
         color: Color(0xFFF6F2EC),
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
@@ -200,9 +222,19 @@ class _SearchSheetState extends State<SearchSheet> {
                     spacing: 8,
                     runSpacing: 8,
                     children: [
-                      const Text(
-                        'Акыркы издөөлөр',
-                        style: TextStyle(fontWeight: FontWeight.w700),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text(
+                            'Акыркы издөөлөр',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          IconButton(
+                            tooltip: 'Издөө тарыхын тазалоо',
+                            onPressed: _clearRecent,
+                            icon: const Icon(Icons.delete_outline, size: 18),
+                          ),
+                        ],
                       ),
                       ..._recent.map(
                         (item) => Semantics(
@@ -237,15 +269,18 @@ class _SearchSheetState extends State<SearchSheet> {
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
                             ),
-                            title: Text(
-                              result.snippet,
-                              maxLines: 4,
-                              overflow: TextOverflow.ellipsis,
+                            title: _HighlightedSnippet(
+                              text: result.snippet,
+                              query: result.query,
                             ),
                             subtitle: Text(result.chapter),
                             trailing: const Icon(Icons.chevron_right),
                             onTap: () {
-                              widget.onBookmarkTap(result.locator);
+                              widget.onResultTap(
+                                result.locator,
+                                result.query,
+                                result.occurrence,
+                              );
                               Navigator.pop(context);
                             },
                           ),
@@ -265,9 +300,46 @@ class _SearchResult {
     required this.snippet,
     required this.chapter,
     required this.locator,
+    required this.query,
+    required this.occurrence,
   });
 
   final String snippet;
   final String chapter;
   final Locator locator;
+  final String query;
+  final int occurrence;
+}
+
+class _HighlightedSnippet extends StatelessWidget {
+  const _HighlightedSnippet({required this.text, required this.query});
+
+  final String text;
+  final String query;
+
+  @override
+  Widget build(BuildContext context) {
+    final index = text.toLowerCase().indexOf(query.toLowerCase());
+    if (index < 0) {
+      return Text(text, maxLines: 4, overflow: TextOverflow.ellipsis);
+    }
+    final end = index + query.length;
+    return Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(text: text.substring(0, index)),
+          TextSpan(
+            text: text.substring(index, end),
+            style: const TextStyle(
+              backgroundColor: Color(0xFFFFE066),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          TextSpan(text: text.substring(end)),
+        ],
+      ),
+      maxLines: 4,
+      overflow: TextOverflow.ellipsis,
+    );
+  }
 }
