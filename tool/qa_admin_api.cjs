@@ -113,7 +113,9 @@ async function rejected(path, expectedStatus, init = {}) {
     book = undefined;
 
     const coverPath = path.resolve(__dirname, '../web/books/test/OPS/images/i_001.png');
-    const epubPath = path.resolve(__dirname, '../assets/books/test.epub');
+    const epubPath = process.env.KITAPP_QA_EPUB
+      ? path.resolve(process.env.KITAPP_QA_EPUB)
+      : path.resolve(__dirname, '../assets/books/test.epub');
     const form = new FormData();
     form.set('data', JSON.stringify({
       title: `QA EPUB ${suffix}`,
@@ -145,6 +147,29 @@ async function rejected(path, expectedStatus, init = {}) {
     assert.ok(manifest.readingOrder.length > 0);
     assert.equal(manifest.resources.length, manifest.readingOrder.length);
     assert.ok(manifest.toc.length > 0);
+    assert.ok(
+      Array.isArray(manifest.pageList) && manifest.pageList.length > 1,
+      'EPUB without page markers must receive a stable generated page list',
+    );
+    assert.equal(manifest.metadata.numberOfPages, manifest.pageList.length);
+    const positionsLink = manifest.links.find((link) =>
+      (Array.isArray(link.rel) ? link.rel : [link.rel]).includes('positions'),
+    );
+    assert.ok(positionsLink, 'manifest must advertise the generated positions list');
+    const positions = await fetch(new URL(positionsLink.href, file.manifestUrl)).then((response) => {
+      assert.ok(response.ok, `GET positions: ${response.status}`);
+      return response.json();
+    });
+    assert.equal(positions.metadata.numberOfItems, manifest.pageList.length);
+    assert.deepEqual(positions.positions, manifest.pageList);
+    const generatedMarker = manifest.pageList.find((locator) =>
+      locator.locations?.fragments?.[0]?.startsWith('kitapp-page-'),
+    );
+    assert.ok(generatedMarker, 'generated page locators must point to stable XHTML markers');
+    const generatedDocument = await fetch(
+      new URL(generatedMarker.href.split('#')[0], file.manifestUrl),
+    ).then((response) => response.text());
+    assert.match(generatedDocument, /role=["']doc-pagebreak["']/);
     console.log('PASS atomic EPUB upload, extraction and manifest');
 
     const duplicate = new FormData();

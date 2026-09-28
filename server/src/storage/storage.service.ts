@@ -4,6 +4,11 @@ import { XMLParser } from 'fast-xml-parser';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, extname, join, posix, resolve } from 'node:path';
+import {
+  DeclaredEpubPage,
+  EpubReadingResource,
+  normalizeEpubPages,
+} from './epub-page-normalizer.js';
 
 type StoredBook = {
   key: string;
@@ -66,17 +71,29 @@ export class StorageService {
       const spineItems = this.asArray(packageXml?.spine?.itemref);
       const items = new Map(manifestItems.map((item) => [item.id, item]));
       const opfDir = posix.dirname(opfPath);
-      const readingOrder = spineItems
+      const readingResources: EpubReadingResource[] = spineItems
         .map((item) => items.get(item.idref))
         .filter(Boolean)
-        .map((item) => ({
-          href: `content/${posix.normalize(posix.join(opfDir, item.href))}`,
-          type: item['media-type'] ?? 'application/xhtml+xml',
-        }));
-      if (!readingOrder.length) throw new Error('empty spine');
+        .map((item) => {
+          const sourcePath = posix.normalize(posix.join(opfDir, item.href));
+          const entry = byName.get(sourcePath);
+          if (!entry) throw new Error('missing spine resource');
+          return {
+            href: `content/${sourcePath}`,
+            sourcePath,
+            type: item['media-type'] ?? 'application/xhtml+xml',
+            content: entry.getData().toString('utf8'),
+          };
+        });
+      if (!readingResources.length) throw new Error('empty spine');
+
+      const readingOrder = readingResources.map(({ href, type }) => ({ href, type }));
 
       const toc = this.readToc(packageXml, manifestItems, byName, opfDir)
-        .map((item) => ({ ...item, href: `content/${posix.normalize(posix.join(opfDir, item.href))}` }));
+        .map((item) => ({ ...item, href: this.publicationHref(opfDir, item.href) }));
+      const declaredPages = this.readPageList(packageXml, manifestItems, byName, opfDir)
+        .map((item) => ({ ...item, href: this.publicationHref(opfDir, item.href) }));
+      const normalizedPages = normalizeEpubPages(readingResources, declaredPages);
       const metadata = packageXml?.metadata ?? {};
       const title = this.text(metadata.title) || file.originalname.replace(/\.epub$/i, '');
       const language = this.text(metadata.language) || 'und';
@@ -84,15 +101,35 @@ export class StorageService {
 
       await mkdir(temp, { recursive: true });
       zip.extractAllTo(join(temp, 'content'), true);
+      for (const [sourcePath, content] of normalizedPages.updates) {
+        await writeFile(join(temp, 'content', sourcePath), content);
+      }
+      const positions = {
+        metadata: { numberOfItems: normalizedPages.pageList.length },
+        links: [{ rel: 'self', href: 'positions.json', type: 'application/vnd.readium.position-list+json' }],
+        positions: normalizedPages.pageList,
+      };
       const manifest = {
         '@context': 'https://readium.org/webpub-manifest/context.jsonld',
-        metadata: { '@type': 'http://schema.org/Book', title, language, author },
-        links: [{ rel: 'self', href: 'manifest.json', type: 'application/webpub+json' }],
+        metadata: {
+          '@type': 'http://schema.org/Book',
+          title,
+          language,
+          author,
+          numberOfPages: normalizedPages.pageList.length,
+          pageListSource: normalizedPages.source,
+        },
+        links: [
+          { rel: 'self', href: 'manifest.json', type: 'application/webpub+json' },
+          { rel: 'positions', href: 'positions.json', type: 'application/vnd.readium.position-list+json' },
+        ],
         readingOrder,
         resources: readingOrder,
         toc: toc.length ? toc : readingOrder.map((item, index) => ({ title: `${index + 1}-бөлүм`, href: item.href })),
+        pageList: normalizedPages.pageList,
       };
       await writeFile(join(temp, 'manifest.json'), JSON.stringify(manifest));
+      await writeFile(join(temp, 'positions.json'), JSON.stringify(positions));
       await mkdir(dirname(target), { recursive: true });
       await rename(temp, target);
       return { key: `books/${id}.epub`, manifestKey: `books/${id}/manifest.json` };
@@ -110,7 +147,11 @@ export class StorageService {
   }
 
   async signedUrl(key: string) {
-    if (key.endsWith('.epub')) return this.url(`${key.slice(0, -5)}/manifest.json`);
+    if (key.endsWith('.epub')) {
+      const directoryKey = key.slice(0, -5);
+      await this.normalizeStoredPublication(directoryKey);
+      return this.url(`${directoryKey}/manifest.json`);
+    }
     return this.url(key);
   }
 
@@ -125,6 +166,53 @@ export class StorageService {
 
   private url(key: string) {
     return `${this.publicBase}/files/${key.split('/').map(encodeURIComponent).join('/')}`;
+  }
+
+  private async normalizeStoredPublication(directoryKey: string) {
+    const directory = join(this.root, directoryKey);
+    const manifestPath = join(directory, 'manifest.json');
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as Record<string, any>;
+    if (Array.isArray(manifest.pageList) && manifest.pageList.length > 0) return;
+
+    const readingOrder = this.asArray(manifest.readingOrder);
+    const resources: EpubReadingResource[] = [];
+    for (const item of readingOrder) {
+      const href = String(item?.href ?? '').split('#')[0];
+      if (!href.startsWith('content/') || href.split('/').includes('..')) continue;
+      resources.push({
+        href,
+        sourcePath: href.slice('content/'.length),
+        type: item?.type ?? 'application/xhtml+xml',
+        content: await readFile(join(directory, href), 'utf8'),
+      });
+    }
+    if (!resources.length) return;
+    const normalized = normalizeEpubPages(resources, []);
+    for (const [sourcePath, content] of normalized.updates) {
+      await writeFile(join(directory, 'content', sourcePath), content);
+    }
+    const positions = {
+      metadata: { numberOfItems: normalized.pageList.length },
+      links: [{ rel: 'self', href: 'positions.json', type: 'application/vnd.readium.position-list+json' }],
+      positions: normalized.pageList,
+    };
+    manifest.metadata = {
+      ...(manifest.metadata ?? {}),
+      numberOfPages: normalized.pageList.length,
+      pageListSource: normalized.source,
+    };
+    manifest.links = this.asArray(manifest.links).filter((link) => {
+      const rels = this.asArray(link?.rel);
+      return !rels.includes('positions');
+    });
+    manifest.links.push({
+      rel: 'positions',
+      href: 'positions.json',
+      type: 'application/vnd.readium.position-list+json',
+    });
+    manifest.pageList = normalized.pageList;
+    await writeFile(join(directory, 'positions.json'), JSON.stringify(positions));
+    await writeFile(manifestPath, JSON.stringify(manifest));
   }
 
   private readToc(packageXml: any, manifestItems: any[], entries: Map<string, AdmZip.IZipEntry>, opfDir: string) {
@@ -145,6 +233,55 @@ export class StorageService {
       return points.map((point) => ({ title: this.text(point?.navLabel?.text) || 'Бөлүм', href: point?.content?.src })).filter((x) => x.href);
     }
     return [];
+  }
+
+  private readPageList(
+    packageXml: any,
+    manifestItems: any[],
+    entries: Map<string, AdmZip.IZipEntry>,
+    opfDir: string,
+  ): DeclaredEpubPage[] {
+    const nav = manifestItems.find((item) => String(item.properties ?? '').split(/\s+/).includes('nav'));
+    if (nav) {
+      const entry = entries.get(posix.normalize(posix.join(opfDir, nav.href)));
+      if (entry) {
+        const result: DeclaredEpubPage[] = [];
+        this.collectPageListAnchors(this.xml.parse(entry.getData().toString('utf8')), result, false);
+        if (result.length) return result;
+      }
+    }
+
+    const ncx = manifestItems.find((item) => item['media-type'] === 'application/x-dtbncx+xml');
+    if (!ncx) return [];
+    const entry = entries.get(posix.normalize(posix.join(opfDir, ncx.href)));
+    const targets = entry
+      ? this.asArray(this.xml.parse(entry.getData().toString('utf8'))?.ncx?.pageList?.pageTarget)
+      : [];
+    return targets
+      .map((target) => ({
+        href: target?.content?.src,
+        label: this.text(target?.navLabel?.text) || this.text(target?.value),
+      }))
+      .filter((page) => typeof page.href === 'string' && page.href.length > 0);
+  }
+
+  private collectPageListAnchors(value: any, result: DeclaredEpubPage[], insidePageList: boolean) {
+    if (!value || typeof value !== 'object') return;
+    const isPageList = insidePageList || String(value.type ?? '').split(/\s+/).includes('page-list');
+    if (isPageList && value.a) {
+      for (const anchor of this.asArray(value.a)) {
+        if (anchor?.href) result.push({ href: anchor.href, label: this.text(anchor) });
+      }
+    }
+    for (const child of Object.values(value)) {
+      this.collectPageListAnchors(child, result, isPageList);
+    }
+  }
+
+  private publicationHref(opfDir: string, href: string) {
+    const [path, fragment] = String(href).split('#', 2);
+    const resolved = `content/${posix.normalize(posix.join(opfDir, path))}`;
+    return fragment ? `${resolved}#${fragment}` : resolved;
   }
 
   private collectAnchors(value: any, result: Array<{ title: string; href: string }>) {
