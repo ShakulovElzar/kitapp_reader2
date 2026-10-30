@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { AccessType, BookStatus, PaymentStatus } from '../generated/prisma/enums.js';
 import type { Prisma } from '../generated/prisma/client.js';
@@ -47,6 +47,7 @@ export class PublicService {
     if (book.accessType === AccessType.RENTAL) {
       throw new BadRequestException('Бул китеп ижарага гана берилет');
     }
+    this.requireLocalPayments();
     const existing = await this.prisma.purchase.findFirst({
       where: { readerId, bookId, status: PaymentStatus.COMPLETED },
     });
@@ -62,6 +63,7 @@ export class PublicService {
     if (book.accessType === AccessType.FREE || !book.rentalPrice) {
       throw new BadRequestException('Бул китеп ижарага берилбейт');
     }
+    this.requireLocalPayments();
     const [purchase, activeRental] = await Promise.all([
       this.prisma.purchase.findFirst({ where: { readerId, bookId, status: PaymentStatus.COMPLETED } }),
       this.prisma.rental.findFirst({ where: { readerId, bookId, status: PaymentStatus.COMPLETED, endsAt: { gt: new Date() } } }),
@@ -191,6 +193,17 @@ export class PublicService {
       }),
     ]);
     return Boolean(purchase || rental);
+  }
+
+  /**
+   * Purchases and rentals complete instantly with no real payment. That is only
+   * allowed with PAYMENT_MODE=local (the default outside production).
+   */
+  private requireLocalPayments() {
+    const mode = process.env.PAYMENT_MODE ?? (process.env.NODE_ENV === 'production' ? 'none' : 'local');
+    if (mode !== 'local') {
+      throw new ServiceUnavailableException('Төлөм системасы азырынча туташтырылган эмес');
+    }
   }
 
   private async addToLibrary(readerId: string, bookId: string) {

@@ -8,7 +8,7 @@ Branch: `codex/full-app-reader-fixes`. Tested: server/admin builds, `flutter ana
 - [x] **Book files:** stop serving `/files/books/**` publicly. Issue short-lived HMAC-signed URLs (~1h), checked by a guarded files route that also checks access (purchase / active rental / free).
 - [x] **OTP:** max 5 attempts per code, rate limit per IP and per phone, use `crypto.randomInt`, add an SMS provider interface plus a Kyrgyz SMS gateway (*provider still to be chosen; `SMS_PROVIDER=log` works locally, and anything else refuses to send*). Show the "111111" hint only when the server returns `developmentCode`.
 - [x] **Blocking:** `ReaderGuard` checks `isBlocked` / `deletedAt` in the DB on every request.
-- [ ] **Payments:** keep instant fake purchases for the MVP demo (decided). Before any real launch, put them behind a `PAYMENT_MODE=local` switch.
+- [x] **Payments:** keep instant fake purchases for the MVP demo (decided). Now behind `PAYMENT_MODE=local` (default outside production); a real payment provider is still needed before launch.
 
 ### App-breaking
 - [x] Restore `web/readiumReader.js` (it was deleted by accident, so the reader showed a black screen). Move test fixtures (`test.epub`, cover PNG) into `tool/fixtures/`, and update pubspec and the QA scripts.
@@ -34,11 +34,11 @@ Branch: `codex/full-app-reader-fixes`. Tested: server/admin builds, `flutter ana
 - [x] Duplicate author name, category, or slug, and blocking a reader who doesn't exist, return 500 errors. Map Prisma P2002 → 409 and P2025 → 404.
 - [x] Remove the prefilled admin email/password (admin login) and phone `0555123456` (app login).
 - [x] The DTO rejects formatted phones like `+996 (700) 12-34-56` even though `normalizePhone` would handle them.
-- [ ] The share button copies `/books/<slug>`, which no route handles. Add the route or remove the button.
-- [ ] Admin pages use `.then()` without a `catch` (dashboard, orders), and the block toggle has no error handling or confirmation.
+- [x] The share button copies `/books/<slug>`, which no route handles. Add the route or remove the button.
+- [x] Admin pages use `.then()` without a `catch` (dashboard, orders), and the block toggle has no error handling or confirmation.
 - [x] Re-buying after a refund would hit the unique `reference` and return a 500.
 - [x] JWT secret falls back to `'local-kitapp-secret'`. Fail on startup if `JWT_SECRET` is missing outside dev.
-- [ ] `ReadingProgress` sync caps at 300 s per request, so seconds above that are lost after failed syncs.
+- [x] `ReadingProgress` sync caps at 300 s per request, so seconds above that are lost after failed syncs.
 - [x] Profile "Purchases: N books" counts every free book.
 - [x] `web/index.html`: page title and description are still "kitapp_reader2" / "A new Flutter project."
 

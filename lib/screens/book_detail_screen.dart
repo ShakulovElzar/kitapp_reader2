@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../models/book.dart';
 import '../services/api_client.dart';
+import '../services/launch_link.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/book_widgets.dart';
@@ -123,7 +124,11 @@ class BookDetailScreen extends StatelessWidget {
             onPressed: () async {
               await Clipboard.setData(
                 ClipboardData(
-                  text: Uri.base.resolve('/books/${book.slug}').toString(),
+                  // The app opens `?book=<slug>` links on start (see AppShell).
+                  text: (launchUrl() ?? Uri.base)
+                      .replace(queryParameters: {'book': book.slug})
+                      .removeFragment()
+                      .toString(),
                 ),
               );
               if (!context.mounted) return;
@@ -225,7 +230,7 @@ class BookDetailScreen extends StatelessWidget {
                           children: [
                             _Tag(text: book.category),
                             if (book.isAdult) const _Tag(text: '18+'),
-                            if (hasAccess)
+                            if (state.inLibrary(book))
                               const _Tag(text: 'Сизде бар', accent: true),
                           ],
                         ),

@@ -41,6 +41,7 @@ class _ReaderScreenState extends State<ReaderScreen>
   ApiClient? _api;
   Timer? _readingTimer;
   int _unsyncedActiveSeconds = 0;
+  bool _syncing = false;
   bool _isActive = true;
 
   int _fontSize = 120;
@@ -297,10 +298,17 @@ class _ReaderScreenState extends State<ReaderScreen>
   }
 
   Future<void> _syncReadingProgress() async {
-    final seconds = _unsyncedActiveSeconds;
     final locator = _currentLocator;
-    if (seconds == 0 || locator == null || _api == null) return;
-    _unsyncedActiveSeconds = 0;
+    if (_syncing ||
+        _unsyncedActiveSeconds == 0 ||
+        locator == null ||
+        _api == null) {
+      return;
+    }
+    _syncing = true;
+    // The server accepts at most 300 seconds per request; the rest waits for the next sync.
+    final seconds = _unsyncedActiveSeconds.clamp(1, 300);
+    _unsyncedActiveSeconds -= seconds;
     try {
       await _api!.saveProgress(
         bookId: _bookId,
@@ -310,6 +318,8 @@ class _ReaderScreenState extends State<ReaderScreen>
       );
     } catch (_) {
       _unsyncedActiveSeconds += seconds;
+    } finally {
+      _syncing = false;
     }
   }
 

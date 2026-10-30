@@ -31,8 +31,9 @@ class _BookmarksSheetState extends State<BookmarksSheet> {
 
   String get _bookmarksKey =>
       AppStateScope.read(context).api.userKey('bookmarks_${widget.bookId}');
-  String get _titlesKey =>
-      AppStateScope.read(context).api.userKey('bookmark_titles_${widget.bookId}');
+  String get _titlesKey => AppStateScope.read(
+    context,
+  ).api.userKey('bookmark_titles_${widget.bookId}');
 
   @override
   void initState() {

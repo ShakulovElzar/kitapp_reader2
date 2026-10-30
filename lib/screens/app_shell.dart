@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../services/launch_link.dart';
+import '../state/app_state.dart';
 import '../theme/app_theme.dart';
+import 'book_detail_screen.dart';
 import 'catalog_screen.dart';
 import 'library_screen.dart';
 import 'profile_screen.dart';
@@ -14,6 +17,48 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   int _index = 0;
+
+  /// Book slug from a shared `?book=<slug>` link, opened once the catalog loads.
+  String? _sharedSlug = launchUrl()?.queryParameters['book'];
+  AppStateController? _state;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final state = AppStateScope.read(context);
+    if (_state != state) {
+      _state?.removeListener(_openSharedBook);
+      _state = state..addListener(_openSharedBook);
+      WidgetsBinding.instance.addPostFrameCallback((_) => _openSharedBook());
+    }
+  }
+
+  @override
+  void dispose() {
+    _state?.removeListener(_openSharedBook);
+    super.dispose();
+  }
+
+  void _openSharedBook() {
+    final slug = _sharedSlug;
+    final state = _state;
+    if (slug == null || state == null || !mounted) return;
+    final matches = state.visibleBooks.where((book) => book.slug == slug);
+    if (matches.isEmpty) {
+      // Give up once the catalog has loaded without the book.
+      if (!state.loading && state.visibleBooks.isNotEmpty) _sharedSlug = null;
+      return;
+    }
+    _sharedSlug = null;
+    final book = matches.first;
+    // Wait until the app's first navigation settles, or the route gets replaced.
+    Future<void>.delayed(const Duration(milliseconds: 300), () {
+      if (!mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => BookDetailScreen(book: book)),
+      );
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

@@ -17,6 +17,7 @@ const env = {
   PORT: port,
   PUBLIC_URL: `http://127.0.0.1:${port}`,
   OTP_MODE: 'local',
+  PAYMENT_MODE: 'local',
   SMS_PROVIDER: 'log',
   OTP_IP_LIMIT: '1000',
   EDITOR_EMAIL: 'editor@kitapp.kg',

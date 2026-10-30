@@ -125,7 +125,13 @@ function AdminShell({ onLogout }: { onLogout: () => void }) {
 function DashboardPage({ onNavigate, isSuper }: { onNavigate: (page: Page) => void; isSuper: boolean }) {
   const [data, setData] = useState<Dashboard | null>(null);
   const [books, setBooks] = useState<Book[]>([]);
-  useEffect(() => { void Promise.all([api<Dashboard>('/admin/dashboard'), api<Book[]>('/admin/books')]).then(([d, b]) => { setData(d); setBooks(b.slice(0, 5)); }); }, []);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    void Promise.all([api<Dashboard>('/admin/dashboard'), api<Book[]>('/admin/books')])
+      .then(([d, b]) => { setData(d); setBooks(b.slice(0, 5)); })
+      .catch((value) => setError(value instanceof Error ? value.message : 'Маалымат жүктөлгөн жок'));
+  }, []);
+  if (error) return <div className="alert error">{error}</div>;
   if (!data) return <Loading />;
   return (
     <div className="page-grid">
@@ -288,7 +294,10 @@ function ReadersPage() {
   const [readers, setReaders] = useState<Reader[]>([]);
   async function load() { setReaders(await api('/admin/readers')); }
   useEffect(() => { void load(); }, []);
-  async function toggle(reader: Reader) { await api(`/admin/readers/${reader.id}/block`, { method: 'PATCH', body: JSON.stringify({ isBlocked: !reader.isBlocked, blockNote: !reader.isBlocked ? 'Администратор тарабынан бөгөттөлдү' : undefined }) }); await load(); }
+  async function toggle(reader: Reader) {
+    const question = reader.isBlocked ? `${reader.phone} номерин бөгөттөн чыгарасызбы?` : `${reader.phone} номерин бөгөттөйсүзбү? Ал дароо китептерине кире албай калат.`;
+    if (!window.confirm(question)) return;
+    await api(`/admin/readers/${reader.id}/block`, { method: 'PATCH', body: JSON.stringify({ isBlocked: !reader.isBlocked, blockNote: !reader.isBlocked ? 'Администратор тарабынан бөгөттөлдү' : undefined }) }); await load(); }
   return <section className="panel"><PanelHeader title={`Окурмандар · ${readers.length}`} /><div className="table-wrap"><table><thead><tr><th>Окурман</th><th>Телефон</th><th>Сатып алуу</th><th>Ижара</th><th>Статус</th><th /></tr></thead><tbody>{readers.map((reader) => <tr key={reader.id}><td><strong>{reader.name ?? 'Аты көрсөтүлгөн эмес'}</strong><small>{date(reader.createdAt)} катталган</small></td><td>{reader.phone}</td><td>{reader._count.purchases}</td><td>{reader._count.rentals}</td><td><Badge tone={reader.isBlocked ? 'red' : 'green'}>{reader.isBlocked ? 'Бөгөттөлгөн' : 'Активдүү'}</Badge></td><td><button className="text-button" onClick={() => void toggle(reader)}>{reader.isBlocked ? 'Ачуу' : 'Бөгөттөө'}</button></td></tr>)}</tbody></table></div></section>;
 }
 

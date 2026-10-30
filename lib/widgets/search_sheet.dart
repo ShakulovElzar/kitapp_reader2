@@ -40,8 +40,9 @@ class _SearchSheetState extends State<SearchSheet> {
   bool _isSearching = false;
   int _searchGeneration = 0;
 
-  String get _recentKey =>
-      AppStateScope.read(context).api.userKey('reader_searches_${widget.bookId}');
+  String get _recentKey => AppStateScope.read(
+    context,
+  ).api.userKey('reader_searches_${widget.bookId}');
 
   @override
   void initState() {
