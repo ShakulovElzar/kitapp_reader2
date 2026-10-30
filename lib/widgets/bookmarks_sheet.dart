@@ -4,6 +4,9 @@ import 'package:flureadium/flureadium.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../theme/reader_palette.dart';
+import 'contents_sheet.dart';
+
 class BookmarksSheet extends StatefulWidget {
   const BookmarksSheet({
     super.key,
@@ -112,111 +115,76 @@ class _BookmarksSheetState extends State<BookmarksSheet> {
     final filtered = _bookmarks
         .where((item) => _title(item).toLowerCase().contains(query))
         .toList();
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.9,
-      decoration: const BoxDecoration(
-        color: Color(0xFFF6F2EC),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          children: [
-            const SizedBox(height: 8),
-            Container(
-              width: 42,
-              height: 4,
-              decoration: BoxDecoration(
-                color: const Color(0xFFD7CABB),
-                borderRadius: BorderRadius.circular(10),
+    return ReaderListScaffold(
+      title: 'КЫСТАРМАЛАР',
+      child: Column(
+        children: [
+          const SizedBox(height: 14),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            child: TextField(
+              onChanged: (value) => setState(() => _search = value),
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.search),
+                hintText: 'Кыстармадан издөө...',
               ),
             ),
-            SizedBox(
-              height: 54,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: IconButton(
-                      tooltip: 'Артка',
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.arrow_back_ios_new),
-                    ),
-                  ),
-                  const Text(
-                    'Кыстармалар',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18),
-              child: TextField(
-                onChanged: (value) => setState(() => _search = value),
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.search),
-                  hintText: 'Кыстармадан издөө...',
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: filtered.isEmpty
-                  ? const Center(child: Text('Кыстармалар жок'))
-                  : ListView.separated(
-                      padding: const EdgeInsets.all(18),
-                      itemCount: filtered.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 8),
-                      itemBuilder: (context, index) {
-                        final locator = filtered[index];
-                        return Material(
-                          color: Colors.transparent,
-                          child: ListTile(
-                            tileColor: Colors.white.withValues(alpha: .55),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            title: Semantics(
-                              button: true,
-                              label: 'Кыстарманы ачуу: ${_title(locator)}',
-                              onTap: () {
-                                Navigator.pop(context);
-                                widget.onBookmarkTap(locator);
-                              },
-                              child: Text(_title(locator)),
-                            ),
-                            subtitle: Text(
-                              '${locator.locations?.position ?? 1}-бет',
-                            ),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: filtered.isEmpty
+                ? const Center(child: Text('Кыстармалар жок'))
+                : ListView.separated(
+                    padding: const EdgeInsets.all(18),
+                    itemCount: filtered.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 8),
+                    itemBuilder: (context, index) {
+                      final locator = filtered[index];
+                      return Material(
+                        color: Colors.transparent,
+                        child: ListTile(
+                          tileColor: ReaderPalette.card,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          title: Semantics(
+                            button: true,
+                            label: 'Кыстарманы ачуу: ${_title(locator)}',
                             onTap: () {
                               Navigator.pop(context);
                               widget.onBookmarkTap(locator);
                             },
-                            trailing: PopupMenuButton<String>(
-                              tooltip: 'Кыстарма аракеттери',
-                              onSelected: (value) => value == 'rename'
-                                  ? _rename(locator)
-                                  : _delete(locator),
-                              itemBuilder: (_) => const [
-                                PopupMenuItem(
-                                  value: 'rename',
-                                  child: Text('Атын өзгөртүү'),
-                                ),
-                                PopupMenuItem(
-                                  value: 'delete',
-                                  child: Text('Өчүрүү'),
-                                ),
-                              ],
-                            ),
+                            child: Text(_title(locator)),
                           ),
-                        );
-                      },
-                    ),
-            ),
-          ],
-        ),
+                          subtitle: Text(
+                            '${locator.locations?.position ?? 1}-бет',
+                          ),
+                          onTap: () {
+                            Navigator.pop(context);
+                            widget.onBookmarkTap(locator);
+                          },
+                          trailing: PopupMenuButton<String>(
+                            tooltip: 'Кыстарма аракеттери',
+                            onSelected: (value) => value == 'rename'
+                                ? _rename(locator)
+                                : _delete(locator),
+                            itemBuilder: (_) => const [
+                              PopupMenuItem(
+                                value: 'rename',
+                                child: Text('Атын өзгөртүү'),
+                              ),
+                              PopupMenuItem(
+                                value: 'delete',
+                                child: Text('Өчүрүү'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
       ),
     );
   }

@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Ip, Post } from '@nestjs/common';
 import { AdminLoginDto, RequestOtpDto, VerifyOtpDto } from './auth.dto.js';
 import { AuthService } from './auth.service.js';
 
@@ -12,8 +12,8 @@ export class AuthController {
   }
 
   @Post('phone/request-otp')
-  requestOtp(@Body() dto: RequestOtpDto) {
-    return this.auth.requestOtp(dto);
+  requestOtp(@Body() dto: RequestOtpDto, @Ip() ip: string) {
+    return this.auth.requestOtp(dto, ip);
   }
 
   @Post('phone/verify-otp')

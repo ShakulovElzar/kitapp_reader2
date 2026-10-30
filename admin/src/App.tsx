@@ -34,8 +34,8 @@ export function App() {
 }
 
 function Login({ onSuccess }: { onSuccess: () => void }) {
-  const [email, setEmail] = useState('admin@kitapp.kg');
-  const [password, setPassword] = useState('Kitapp123!');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -75,7 +75,6 @@ function Login({ onSuccess }: { onSuccess: () => void }) {
         </Field>
         {error && <div className="alert error">{error}</div>}
         <button className="primary wide" disabled={loading}>{loading ? 'Күтүңүз…' : 'Кирүү'}</button>
-        <small>Локалдык кирүү: admin@kitapp.kg / Kitapp123!</small>
       </form>
     </main>
   );

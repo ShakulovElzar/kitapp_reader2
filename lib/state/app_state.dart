@@ -5,7 +5,9 @@ import '../models/book.dart';
 import '../services/api_client.dart';
 
 class AppStateController extends ChangeNotifier {
-  AppStateController._(this._prefs, this.api);
+  AppStateController._(this._prefs, this.api) {
+    api.onUnauthorized = _clearSession;
+  }
 
   final SharedPreferences _prefs;
   final ApiClient api;
@@ -56,7 +58,7 @@ class AppStateController extends ChangeNotifier {
   bool hasAccess(Book book) => book.isFree || _libraryIds.contains(book.id);
   double progressFor(Book book) => _progress[book.id] ?? 0;
 
-  Future<void> requestOtp(String phone) => api.requestOtp(phone);
+  Future<String?> requestOtp(String phone) => api.requestOtp(phone);
 
   Future<void> verifyOtp(String phone, String code) async {
     await api.verifyOtp(phone, code);
@@ -66,10 +68,16 @@ class AppStateController extends ChangeNotifier {
 
   Future<void> logout() async {
     await api.logout();
+    _clearSession();
+  }
+
+  void _clearSession() {
     _books = const [];
     _library = const [];
     _recent = const [];
     _libraryIds.clear();
+    _rentalEnds.clear();
+    _error = null;
     notifyListeners();
   }
 
@@ -101,7 +109,8 @@ class AppStateController extends ChangeNotifier {
       }
     } on ApiException catch (error) {
       _error = error.message;
-      rethrow;
+    } catch (_) {
+      _error = 'Маалымат жүктөлгөн жок';
     } finally {
       _loading = false;
       notifyListeners();

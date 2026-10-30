@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { AccessType, BookStatus, PaymentStatus } from '../generated/prisma/enums.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -47,7 +48,7 @@ export class PublicService {
     });
     if (existing) throw new BadRequestException('Бул китеп мурда сатып алынган');
     const purchase = await this.prisma.purchase.create({ data: {
-      readerId, bookId, amount: book.price, reference: `local-purchase-${readerId}-${bookId}`,
+      readerId, bookId, amount: book.price, reference: `local-purchase-${randomUUID()}`,
     } });
     return { success: true, purchase };
   }

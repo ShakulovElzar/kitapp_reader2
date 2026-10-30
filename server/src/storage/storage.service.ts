@@ -1,14 +1,35 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import AdmZip from 'adm-zip';
 import { XMLParser } from 'fast-xml-parser';
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { dirname, extname, join, posix, resolve } from 'node:path';
+import { dirname, extname, join, normalize, posix, resolve, sep } from 'node:path';
 import {
   DeclaredEpubPage,
   EpubReadingResource,
   normalizeEpubPages,
 } from './epub-page-normalizer.js';
+
+// Long enough for a reading session; the app asks for a fresh link each time a book opens.
+const BOOK_LINK_TTL_SECONDS = 6 * 60 * 60;
+
+function fileSigningSecret() {
+  return process.env.FILES_SECRET ?? process.env.JWT_SECRET ?? 'local-kitapp-secret';
+}
+
+// Tells the web reader to use its paginated EPUB navigator instead of the scroll-only WebPub one.
+const EPUB_PROFILE = 'https://readium.org/webpub-manifest/profiles/epub';
+
+// The paginated navigator matches positions to reading-order links, so hrefs must not carry #fragments.
+// The web reader ignores a positions document without a top-level `total`.
+function positionsDocument(pageList: Array<{ href: string; locations?: Record<string, unknown> }>) {
+  return {
+    total: pageList.length,
+    metadata: { numberOfItems: pageList.length },
+    links: [{ rel: 'self', href: 'positions.json', type: 'application/vnd.readium.position-list+json' }],
+    positions: pageList.map((page) => ({ ...page, href: String(page.href).split('#')[0] })),
+  };
+}
 
 type StoredBook = {
   key: string;
@@ -104,15 +125,13 @@ export class StorageService {
       for (const [sourcePath, content] of normalizedPages.updates) {
         await writeFile(join(temp, 'content', sourcePath), content);
       }
-      const positions = {
-        metadata: { numberOfItems: normalizedPages.pageList.length },
-        links: [{ rel: 'self', href: 'positions.json', type: 'application/vnd.readium.position-list+json' }],
-        positions: normalizedPages.pageList,
-      };
+      const positions = positionsDocument(normalizedPages.pageList);
       const manifest = {
         '@context': 'https://readium.org/webpub-manifest/context.jsonld',
         metadata: {
           '@type': 'http://schema.org/Book',
+          conformsTo: EPUB_PROFILE,
+          identifier: `urn:kitapp:${id}`,
           title,
           language,
           author,
@@ -146,13 +165,42 @@ export class StorageService {
     if (key.endsWith('.epub')) await rm(join(this.root, key.slice(0, -5)), { recursive: true, force: true });
   }
 
+  /**
+   * Covers get a plain public URL. Books get a link that expires: the signature sits in
+   * the path (not the query) so the reader's relative chapter URLs carry it too.
+   */
   async signedUrl(key: string) {
     if (key.endsWith('.epub')) {
       const directoryKey = key.slice(0, -5);
       await this.normalizeStoredPublication(directoryKey);
-      return this.url(`${directoryKey}/manifest.json`);
+      const bookId = directoryKey.split('/').pop()!;
+      const expires = Math.floor(Date.now() / 1000) + BOOK_LINK_TTL_SECONDS;
+      const token = `${expires}.${this.sign(bookId, expires)}`;
+      return `${this.publicBase}/files/s/${token}/books/${encodeURIComponent(bookId)}/manifest.json`;
     }
     return this.url(key);
+  }
+
+  /** Returns the file a signed book link points to, or null if the link is invalid or expired. */
+  resolveSignedPath(token: string, bookId: string, relativePath: string) {
+    const [expiresText, signature] = token.split('.', 2);
+    const expires = Number(expiresText);
+    if (!signature || !Number.isInteger(expires) || expires < Date.now() / 1000) return null;
+    if (!/^[0-9a-f-]{36}$/.test(bookId)) return null;
+    const expected = Buffer.from(this.sign(bookId, expires));
+    const given = Buffer.from(signature);
+    if (expected.length !== given.length || !timingSafeEqual(expected, given)) return null;
+    const directory = join(this.root, 'books', bookId);
+    const target = normalize(join(directory, decodeURIComponent(relativePath)));
+    return target.startsWith(directory + sep) ? target : null;
+  }
+
+  get coversPath() {
+    return join(this.root, 'covers');
+  }
+
+  private sign(bookId: string, expires: number) {
+    return createHmac('sha256', fileSigningSecret()).update(`${bookId}:${expires}`).digest('base64url');
   }
 
   pathFor(key: string) {
@@ -172,7 +220,21 @@ export class StorageService {
     const directory = join(this.root, directoryKey);
     const manifestPath = join(directory, 'manifest.json');
     const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as Record<string, any>;
-    if (Array.isArray(manifest.pageList) && manifest.pageList.length > 0) return;
+    if (Array.isArray(manifest.pageList) && manifest.pageList.length > 0) {
+      const identifier = `urn:kitapp:${directoryKey.split('/').pop()}`;
+      if (manifest.metadata?.conformsTo !== EPUB_PROFILE || manifest.metadata?.identifier !== identifier) {
+        // The web reader caches publications by identifier, so each book needs its own.
+        manifest.metadata = { ...(manifest.metadata ?? {}), conformsTo: EPUB_PROFILE, identifier };
+        await writeFile(manifestPath, JSON.stringify(manifest));
+      }
+      const positionsPath = join(directory, 'positions.json');
+      const stored = JSON.parse(await readFile(positionsPath, 'utf8').catch(() => '{}'));
+      if (stored.total !== manifest.pageList.length
+        || stored.positions?.some((item: any) => String(item?.href).includes('#'))) {
+        await writeFile(positionsPath, JSON.stringify(positionsDocument(manifest.pageList)));
+      }
+      return;
+    }
 
     const readingOrder = this.asArray(manifest.readingOrder);
     const resources: EpubReadingResource[] = [];
@@ -191,13 +253,11 @@ export class StorageService {
     for (const [sourcePath, content] of normalized.updates) {
       await writeFile(join(directory, 'content', sourcePath), content);
     }
-    const positions = {
-      metadata: { numberOfItems: normalized.pageList.length },
-      links: [{ rel: 'self', href: 'positions.json', type: 'application/vnd.readium.position-list+json' }],
-      positions: normalized.pageList,
-    };
+    const positions = positionsDocument(normalized.pageList);
     manifest.metadata = {
       ...(manifest.metadata ?? {}),
+      conformsTo: EPUB_PROFILE,
+      identifier: `urn:kitapp:${directoryKey.split('/').pop()}`,
       numberOfPages: normalized.pageList.length,
       pageListSource: normalized.source,
     };

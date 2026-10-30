@@ -1,10 +1,14 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flureadium/flureadium.dart';
 import 'package:flutter/material.dart';
 import 'package:html/parser.dart' as html_parser;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../theme/reader_palette.dart';
+import 'contents_sheet.dart';
 
 class SearchSheet extends StatefulWidget {
   const SearchSheet({
@@ -89,7 +93,8 @@ class _SearchSheetState extends State<SearchSheet> {
           if (response.statusCode != 200) continue;
           text =
               html_parser
-                  .parse(response.body)
+                  // EPUB XHTML is UTF-8; the server sends no charset, so decode explicitly.
+                  .parse(utf8.decode(response.bodyBytes, allowMalformed: true))
                   .body
                   ?.text
                   .replaceAll(RegExp(r'\s+'), ' ')
@@ -160,136 +165,104 @@ class _SearchSheetState extends State<SearchSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.9,
-      decoration: const BoxDecoration(
-        color: Color(0xFFF6F2EC),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          children: [
-            const SizedBox(height: 8),
-            Container(
-              width: 42,
-              height: 4,
-              decoration: BoxDecoration(
-                color: const Color(0xFFD7CABB),
-                borderRadius: BorderRadius.circular(10),
+    return ReaderListScaffold(
+      title: 'ИЗДӨӨ',
+      child: Column(
+        children: [
+          const SizedBox(height: 14),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            child: TextField(
+              controller: _controller,
+              focusNode: _focusNode,
+              autofocus: true,
+              onChanged: _queueSearch,
+              onSubmitted: _search,
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.search),
+                hintText: 'Китептин текстинен издөө...',
               ),
             ),
-            SizedBox(
-              height: 54,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: IconButton(
-                      tooltip: 'Артка',
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.arrow_back_ios_new),
-                    ),
-                  ),
-                  const Text(
-                    'Издөө',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-                  ),
-                ],
-              ),
-            ),
+          ),
+          if (_controller.text.isEmpty && _recent.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18),
-              child: TextField(
-                controller: _controller,
-                focusNode: _focusNode,
-                autofocus: true,
-                onChanged: _queueSearch,
-                onSubmitted: _search,
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.search),
-                  hintText: 'Китептин текстинен издөө...',
-                ),
-              ),
-            ),
-            if (_controller.text.isEmpty && _recent.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.all(18),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text(
-                            'Акыркы издөөлөр',
-                            style: TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                          IconButton(
-                            tooltip: 'Издөө тарыхын тазалоо',
-                            onPressed: _clearRecent,
-                            icon: const Icon(Icons.delete_outline, size: 18),
-                          ),
-                        ],
-                      ),
-                      ..._recent.map(
-                        (item) => Semantics(
-                          button: true,
-                          label: 'Акыркы издөө: $item',
-                          child: ActionChip(
-                            label: Text(item),
-                            onPressed: () => _runRecent(item),
-                          ),
+              padding: const EdgeInsets.all(18),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'Акыркы издөөлөр',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        IconButton(
+                          tooltip: 'Издөө тарыхын тазалоо',
+                          onPressed: _clearRecent,
+                          icon: const Icon(Icons.delete_outline, size: 18),
+                        ),
+                      ],
+                    ),
+                    ..._recent.map(
+                      (item) => Semantics(
+                        button: true,
+                        label: 'Акыркы издөө: $item',
+                        child: ActionChip(
+                          label: Text(item),
+                          onPressed: () => _runRecent(item),
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
-            if (_isSearching) const LinearProgressIndicator(minHeight: 2),
-            Expanded(
-              child: _controller.text.isEmpty
-                  ? const SizedBox.shrink()
-                  : _results.isEmpty && !_isSearching
-                  ? const Center(child: Text('Натыйжа табылган жок'))
-                  : ListView.separated(
-                      padding: const EdgeInsets.all(18),
-                      itemCount: _results.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 8),
-                      itemBuilder: (context, index) {
-                        final result = _results[index];
-                        return Material(
-                          color: Colors.transparent,
-                          child: ListTile(
-                            tileColor: Colors.white.withValues(alpha: .55),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            title: _HighlightedSnippet(
-                              text: result.snippet,
-                              query: result.query,
-                            ),
-                            subtitle: Text(result.chapter),
-                            trailing: const Icon(Icons.chevron_right),
-                            onTap: () {
-                              widget.onResultTap(
-                                result.locator,
-                                result.query,
-                                result.occurrence,
-                              );
-                              Navigator.pop(context);
-                            },
-                          ),
-                        );
-                      },
-                    ),
             ),
-          ],
-        ),
+          if (_isSearching) const LinearProgressIndicator(minHeight: 2),
+          Expanded(
+            child: _controller.text.isEmpty
+                ? const SizedBox.shrink()
+                : _results.isEmpty && !_isSearching
+                ? const Center(child: Text('Натыйжа табылган жок'))
+                : ListView.separated(
+                    padding: const EdgeInsets.all(18),
+                    itemCount: _results.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 8),
+                    itemBuilder: (context, index) {
+                      final result = _results[index];
+                      return Material(
+                        color: Colors.transparent,
+                        child: ListTile(
+                          tileColor: ReaderPalette.card,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          title: _HighlightedSnippet(
+                            text: result.snippet,
+                            query: result.query,
+                          ),
+                          subtitle: Text(
+                            result.chapter,
+                            style: const TextStyle(color: ReaderPalette.muted),
+                          ),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () {
+                            widget.onResultTap(
+                              result.locator,
+                              result.query,
+                              result.occurrence,
+                            );
+                            Navigator.pop(context);
+                          },
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
       ),
     );
   }
@@ -332,6 +305,7 @@ class _HighlightedSnippet extends StatelessWidget {
             text: text.substring(index, end),
             style: const TextStyle(
               backgroundColor: Color(0xFFFFE066),
+              color: Color(0xFF111111),
               fontWeight: FontWeight.w700,
             ),
           ),

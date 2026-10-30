@@ -11,7 +11,8 @@ export class AdminLoginDto {
 
 export class RequestOtpDto {
   @IsString()
-  @Matches(/^(?:\+?996|0)\d{9}$/)
+  // Spaces, dashes and brackets are allowed; AuthService normalizes the number.
+  @Matches(/^[\s()-]*(?:\+?996|0)(?:[\s()-]*\d){9}[\s()-]*$/)
   phone!: string;
 }
 

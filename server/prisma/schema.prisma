@@ -63,6 +63,7 @@ model OtpCode {
   reader    Reader?  @relation(fields: [readerId], references: [id])
   phone     String
   codeHash  String
+  attempts  Int      @default(0)
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime @default(now())

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -11,8 +10,8 @@ import 'package:http/http.dart' as http;
 import '../models/book.dart';
 import '../services/api_client.dart';
 import '../state/app_state.dart';
-import '../widgets/reader_menu.dart';
-import '../widgets/settings_sheet.dart';
+import '../theme/reader_palette.dart';
+import '../widgets/reader_panel.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/reader_swipe_bridge.dart';
 import '../services/reader_content_bridge.dart';
@@ -53,6 +52,10 @@ class _ReaderScreenState extends State<ReaderScreen>
   bool _wordWrap = true;
 
   double _brightness = 1.0;
+
+  String _fontFamily = readerFonts.first;
+
+  ReaderPanelTab _panelTab = ReaderPanelTab.contents;
 
   double _sliderProgress = 0.0;
 
@@ -142,23 +145,20 @@ class _ReaderScreenState extends State<ReaderScreen>
 
   Future<void> _loadReaderPreferences() async {
     final prefs = await SharedPreferences.getInstance();
-    final theme = prefs.getString('reader_theme') ?? 'sepia';
-    _fontSize = prefs.getInt('reader_font_size') ?? 120;
-    _brightness = prefs.getDouble('reader_brightness') ?? 1.0;
-    _pageMargins = prefs.getDouble('reader_page_margins') ?? 20;
-    _lineHeight = prefs.getDouble('reader_line_height') ?? 1.5;
+    final theme = ReaderTheme.byId(prefs.getString('reader_theme') ?? 'sepia');
+    _fontSize = (prefs.getInt('reader_font_size') ?? 120).clamp(80, 200);
+    _brightness = (prefs.getDouble('reader_brightness') ?? 1.0).clamp(0.3, 1.0);
+    _pageMargins = (prefs.getDouble('reader_page_margins') ?? 20).clamp(0, 48);
+    _lineHeight = (prefs.getDouble('reader_line_height') ?? 1.5).clamp(
+      1.0,
+      2.2,
+    );
     _wordWrap = prefs.getBool('reader_word_wrap') ?? true;
-    _selectedTheme = theme;
-    if (theme == 'light') {
-      _backgroundColor = Colors.white;
-      _textColor = Colors.black;
-    } else if (theme == 'dark') {
-      _backgroundColor = const Color(0xFF111111);
-      _textColor = const Color(0xFFB8B8B8);
-    } else {
-      _backgroundColor = const Color(0xFFF4E7D3);
-      _textColor = const Color(0xFF3E2F22);
-    }
+    final font = prefs.getString('reader_font_family');
+    _fontFamily = readerFonts.contains(font) ? font! : readerFonts.first;
+    _selectedTheme = theme.id;
+    _backgroundColor = theme.background;
+    _textColor = theme.text;
   }
 
   Future<void> _saveReaderPreferences() async {
@@ -170,6 +170,7 @@ class _ReaderScreenState extends State<ReaderScreen>
       prefs.setDouble('reader_page_margins', _pageMargins),
       prefs.setDouble('reader_line_height', _lineHeight),
       prefs.setBool('reader_word_wrap', _wordWrap),
+      prefs.setString('reader_font_family', _fontFamily),
     ]);
   }
 
@@ -240,14 +241,21 @@ class _ReaderScreenState extends State<ReaderScreen>
         setState(() {
           _publication = publication;
           _manifestUrl = manifestUrl;
-          _initialLocator = savedLocator == null
-              ? (savedPage != null && pageLocators.isNotEmpty
-                    ? pageLocators[(savedPage - 1).clamp(
-                        0,
-                        pageLocators.length - 1,
-                      )]
-                    : null)
-              : _relativeLocator(savedLocator);
+          _pageLocators = pageLocators;
+          _totalPages = pageLocators.isEmpty ? 1 : pageLocators.length;
+          final startPage =
+              savedPage ??
+              (savedLocator == null
+                  ? null
+                  : _pageForLocator(_relativeLocator(savedLocator)));
+          _initialLocator = startPage == null || pageLocators.isEmpty
+              ? null
+              : _positionLocator(
+                  pageLocators[(startPage - 1).clamp(
+                    0,
+                    pageLocators.length - 1,
+                  )],
+                );
           _tableOfContents = publication.tableOfContents.isNotEmpty
               ? publication.tableOfContents
               : manifestToc;
@@ -261,31 +269,8 @@ class _ReaderScreenState extends State<ReaderScreen>
         return;
       }
 
-      final bytes = await rootBundle.load('assets/books/test.epub');
-
-      final tempFile = File('${Directory.systemTemp.path}/test.epub');
-
-      await tempFile.writeAsBytes(bytes.buffer.asUint8List());
-
-      final savedLocator = await _loadSavedLocator();
-      final publication = await _flureadium.openPublication(tempFile.path);
-
-      debugPrint(publication.toString());
-
-      debugPrint(publication.toString());
-
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _publication = publication;
-        _initialLocator = savedLocator;
-
-        _tableOfContents = publication.tableOfContents;
-      });
-
-      debugPrint(publication.runtimeType.toString());
+      // Native apps are out of scope for the MVP; never open a placeholder book.
+      throw const _UnsupportedPlatform();
     } catch (e) {
       debugPrint('ERROR: $e');
       if (!mounted) {
@@ -356,6 +341,14 @@ class _ReaderScreenState extends State<ReaderScreen>
     return target.fragment.isEmpty ? relative : '$relative#${target.fragment}';
   }
 
+  /// The paginated web navigator only opens at an exact entry of positions.json,
+  /// whose hrefs carry no #fragment.
+  Locator _positionLocator(Locator page) {
+    final value = jsonDecode(page.json) as Map<String, dynamic>;
+    value['href'] = (value['href'] as String).split('#').first;
+    return Locator.fromJson(value)!;
+  }
+
   Locator _relativeLocator(Locator locator) {
     final value = jsonDecode(locator.json) as Map<String, dynamic>;
     value['href'] = _relativeHref(locator.href);
@@ -384,6 +377,14 @@ class _ReaderScreenState extends State<ReaderScreen>
   }
 
   int _pageForLocator(Locator locator) {
+    // positions.json mirrors the page list, so the navigator's position is the page.
+    final navigatorPosition = locator.locations?.position;
+    if (_pageLocators.isNotEmpty &&
+        navigatorPosition != null &&
+        navigatorPosition >= 1 &&
+        navigatorPosition <= _pageLocators.length) {
+      return navigatorPosition;
+    }
     if (_pageLocators.isEmpty) {
       final position = locator.locations?.position;
       return (position ?? 1).clamp(1, _totalPages);
@@ -613,7 +614,7 @@ class _ReaderScreenState extends State<ReaderScreen>
   Future<void> _applyReaderStyle() async {
     await _flureadium.setEPUBPreferences(
       EPUBPreferences(
-        fontFamily: 'Georgia',
+        fontFamily: _fontFamily,
 
         fontSize: _fontSize,
 
@@ -629,6 +630,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     );
     applyReaderContentPreferences(
       fontSize: _fontSize,
+      fontFamily: _fontFamily,
       margins: _pageMargins,
       lineHeight: _lineHeight,
       wordWrap: _wordWrap,
@@ -643,101 +645,30 @@ class _ReaderScreenState extends State<ReaderScreen>
     return '#${value.substring(2)}';
   }
 
-  Future<void> _increaseFont() async {
-    if (_fontSize >= 180) {
-      return;
-    }
-
-    setState(() {
-      _fontSize += 10;
-    });
-
+  /// Applies reader settings to the page and saves them.
+  Future<void> _commitReaderStyle() async {
     await _applyReaderStyle();
     await _saveReaderPreferences();
   }
 
-  Future<void> _decreaseFont() async {
-    if (_fontSize <= 80) {
-      return;
-    }
-
+  Future<void> _setTheme(String id) async {
+    final theme = ReaderTheme.byId(id);
     setState(() {
-      _fontSize -= 10;
+      _selectedTheme = theme.id;
+      _backgroundColor = theme.background;
+      _textColor = theme.text;
     });
-
-    await _applyReaderStyle();
-    await _saveReaderPreferences();
+    await _commitReaderStyle();
   }
 
-  void _increaseBrightness() {
-    if (_brightness >= 1.0) {
-      return;
-    }
-
-    setState(() {
-      _brightness += 0.1;
-    });
-    _saveReaderPreferences();
-  }
-
-  void _decreaseBrightness() {
-    if (_brightness <= 0.4) {
-      return;
-    }
-
-    setState(() {
-      _brightness -= 0.1;
-    });
-    _saveReaderPreferences();
-  }
-
-  Future<void> _setTheme(String theme) async {
-    setState(() {
-      _selectedTheme = theme;
-
-      if (theme == 'light') {
-        _backgroundColor = Colors.white;
-
-        _textColor = Colors.black;
-      }
-
-      if (theme == 'sepia') {
-        _backgroundColor = const Color(0xFFF4E7D3);
-
-        _textColor = const Color(0xFF3E2F22);
-      }
-
-      if (theme == 'dark') {
-        _backgroundColor = const Color(0xFF111111);
-
-        _textColor = const Color(0xFFB8B8B8);
-      }
-    });
-
-    await _applyReaderStyle();
-    await _saveReaderPreferences();
-  }
-
-  Future<void> _changeMargins(double delta) async {
-    setState(() {
-      _pageMargins = (_pageMargins + delta).clamp(8, 48).toDouble();
-    });
-    await _applyReaderStyle();
-    await _saveReaderPreferences();
-  }
-
-  Future<void> _changeLineHeight(double delta) async {
-    setState(() {
-      _lineHeight = (_lineHeight + delta).clamp(1.2, 2).toDouble();
-    });
-    await _applyReaderStyle();
-    await _saveReaderPreferences();
+  Future<void> _setFontFamily(String value) async {
+    setState(() => _fontFamily = value);
+    await _commitReaderStyle();
   }
 
   Future<void> _setWordWrap(bool value) async {
     setState(() => _wordWrap = value);
-    await _applyReaderStyle();
-    await _saveReaderPreferences();
+    await _commitReaderStyle();
   }
 
   void _startMenuTimer() {
@@ -757,6 +688,14 @@ class _ReaderScreenState extends State<ReaderScreen>
   }
 
   void _openContents() {
+    final chapterPages = _tableOfContents
+        .map((link) => _pageForHref(link.href))
+        .toList();
+    // The current chapter is the last one starting at or before this page.
+    var currentChapter = -1;
+    for (var i = 0; i < chapterPages.length; i++) {
+      if (chapterPages[i] <= _currentPage) currentChapter = i;
+    }
     _menuTimer?.cancel();
     showModalBottomSheet(
       context: context,
@@ -765,21 +704,10 @@ class _ReaderScreenState extends State<ReaderScreen>
       useSafeArea: true,
       builder: (context) {
         return ContentsSheet(
+          bookTitle: widget.book.title,
           chapters: _tableOfContents.map((e) => e.title ?? 'Бөлүм').toList(),
-          chapterPages: _tableOfContents
-              .map((link) => _pageForHref(link.href))
-              .toList(),
-
-          currentIndex: _tableOfContents.indexWhere((e) {
-            final tocHref = e.href.split('#').first.replaceFirst('/', '');
-
-            final currentHref = _currentLocator?.href
-                .split('#')
-                .first
-                .replaceFirst('/', '');
-
-            return currentHref?.contains(tocHref) ?? false;
-          }),
+          chapterPages: chapterPages,
+          currentIndex: currentChapter,
 
           onChapterTap: (index) async {
             final link = _tableOfContents[index];
@@ -922,56 +850,6 @@ class _ReaderScreenState extends State<ReaderScreen>
     });
   }
 
-  void _openSettings() {
-    _menuTimer?.cancel();
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (context) {
-        return SettingsSheet(
-          onDecreaseFont: _decreaseFont,
-
-          onIncreaseFont: _increaseFont,
-
-          onDecreaseBrightness: _decreaseBrightness,
-
-          onIncreaseBrightness: _increaseBrightness,
-
-          onLightTheme: () => _setTheme('light'),
-
-          onSepiaTheme: () => _setTheme('sepia'),
-
-          onDarkTheme: () => _setTheme('dark'),
-
-          selectedTheme: _selectedTheme,
-          fontSize: _fontSize,
-          brightness: _brightness,
-          pageMargins: _pageMargins,
-          lineHeight: _lineHeight,
-          wordWrap: _wordWrap,
-          onDecreaseMargins: () => _changeMargins(-4),
-          onIncreaseMargins: () => _changeMargins(4),
-          onDecreaseLineHeight: () => _changeLineHeight(-.1),
-          onIncreaseLineHeight: () => _changeLineHeight(.1),
-          onWordWrapChanged: _setWordWrap,
-        );
-      },
-    ).then((_) {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _showMenu = true;
-      });
-
-      _startMenuTimer();
-    });
-  }
-
   void _handleTap(Offset position) {
     if (_bookmarkMode) {
       setState(() {
@@ -1034,12 +912,15 @@ class _ReaderScreenState extends State<ReaderScreen>
     });
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: _backgroundColor,
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 480),
           child: _loadError != null
-              ? _ReaderLoadError(onRetry: _openBook)
+              ? _ReaderLoadError(
+                  onRetry: _openBook,
+                  unsupported: _loadError is _UnsupportedPlatform,
+                )
               : _publication == null
               ? _ReaderLoading(title: widget.book.title)
               : SizedBox.expand(
@@ -1047,27 +928,34 @@ class _ReaderScreenState extends State<ReaderScreen>
                     children: [
                       IgnorePointer(
                         ignoring: _showMenu,
-                        child: ReadiumReaderWidget(
-                          publication: _publication!,
-                          initialLocator: _initialLocator,
+                        child: Padding(
+                          // Keep text clear of the top buttons and page counter.
+                          padding: EdgeInsets.only(
+                            top: MediaQuery.of(context).padding.top + 44,
+                            bottom: MediaQuery.of(context).padding.bottom + 40,
+                          ),
+                          child: ReadiumReaderWidget(
+                            publication: _publication!,
+                            initialLocator: _initialLocator,
 
-                          onReady: () async {
-                            _subscribeToChannels();
+                            onReady: () async {
+                              _subscribeToChannels();
 
-                            await Future.delayed(
-                              const Duration(milliseconds: 300),
-                            );
-
-                            await _applyReaderStyle();
-
-                            final restore = _initialLocator;
-                            if (restore != null) {
-                              await _navigateTo(
-                                restore,
-                                rememberHistory: false,
+                              await Future.delayed(
+                                const Duration(milliseconds: 300),
                               );
-                            }
-                          },
+
+                              await _applyReaderStyle();
+
+                              final restore = _initialLocator;
+                              if (restore != null) {
+                                await _navigateTo(
+                                  restore,
+                                  rememberHistory: false,
+                                );
+                              }
+                            },
+                          ),
                         ),
                       ),
 
@@ -1131,135 +1019,123 @@ class _ReaderScreenState extends State<ReaderScreen>
                           ),
                         ),
 
-                      ReaderMenu(
-                        key: ValueKey(_currentPage),
-
-                        showMenu: _showMenu,
-
-                        progress: _sliderProgress,
-
-                        currentPage: _isDraggingSlider
-                            ? _previewPage
-                            : _currentPage,
-                        totalPages: _totalPages,
-                        canGoBack: _backHistory.isNotEmpty,
-                        canGoForward: _forwardHistory.isNotEmpty,
-                        onBackTap: () => unawaited(_goBackInReader()),
-                        onForwardTap: () => unawaited(_goForwardInReader()),
-
-                        onProgressChanged: (value) {
-                          _menuTimer?.cancel();
-
-                          setState(() {
-                            _isDraggingSlider = true;
-
-                            _sliderProgress = value;
-
-                            _previewPage = _totalPages <= 1
-                                ? 1
-                                : (value * (_totalPages - 1)).round() + 1;
-                          });
-                        },
-                        isBookmarked: _isBookmarked,
-
-                        onBookmarkToggle: () async {
-                          await _addBookmark();
-                        },
-
-                        onProgressChangeEnd: (value) async {
-                          final targetPosition = _totalPages <= 1
-                              ? 1
-                              : (value * (_totalPages - 1)).round() + 1;
-
-                          debugPrint(
-                            'TARGET POSITION → '
-                            '$targetPosition',
-                          );
-
-                          if (_pageLocators.isNotEmpty) {
-                            await _navigateTo(
-                              _pageLocators[targetPosition - 1],
-                            );
-                          }
-
-                          if (!mounted) {
-                            return;
-                          }
-
-                          setState(() {
-                            _isDraggingSlider = false;
-
-                            _previewPage = _currentPage;
-                          });
-
-                          _startMenuTimer();
-                        },
-
-                        onSettingsTap: _openSettings,
-
-                        onContentsTap: _openContents,
-
-                        onSearchTap: _openSearch,
-
-                        onBookmarkTap: _openBookmarks,
-                      ),
-
-                      if (_showMenu)
+                      if (!_showMenu && !_bookmarkMode)
                         Positioned(
-                          top: MediaQuery.of(context).padding.top + 12,
-                          left: 18,
-                          child: GestureDetector(
-                            onTap: () {
-                              Navigator.pop(context);
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 10,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF6F2EC),
-                                borderRadius: BorderRadius.circular(22),
-                              ),
-                              child: const Row(
-                                children: [
-                                  Icon(
-                                    Icons.arrow_back_ios_new,
-                                    color: Color(0xFF4A4035),
-                                    size: 16,
-                                  ),
-
-                                  SizedBox(width: 6),
-
-                                  Text(
-                                    'Чыгуу',
-                                    style: TextStyle(
-                                      color: Color(0xFF4A4035),
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
+                          left: 0,
+                          right: 0,
+                          bottom: MediaQuery.of(context).padding.bottom + 12,
+                          child: IgnorePointer(
+                            child: Text(
+                              '$_currentPage / $_totalPages',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: _textColor.withValues(alpha: .55),
+                                fontSize: 12,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
                                 ],
                               ),
                             ),
                           ),
                         ),
 
-                      if (_isBookmarked)
+                      if (_isBookmarked && !_showMenu)
                         Positioned(
-                          top: MediaQuery.of(context).padding.top + 0,
-                          right: 10,
+                          top: 0,
+                          right: 22,
                           child: IgnorePointer(
-                            child: Opacity(
-                              opacity: 0.45,
-                              child: const Icon(
-                                Icons.bookmark,
-                                color: Color(0xFF5E9F73),
-                                size: 60,
+                            child: Icon(
+                              Icons.bookmark_rounded,
+                              color: ReaderPalette.bookmark.withValues(
+                                alpha: .85,
                               ),
+                              size: 34,
                             ),
                           ),
                         ),
+
+                      Positioned(
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        child: ReaderTopButtons(
+                          visible: _showMenu,
+                          isBookmarked: _isBookmarked,
+                          onBack: () => Navigator.pop(context),
+                          onBookmarkToggle: () => unawaited(_addBookmark()),
+                        ),
+                      ),
+
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: ReaderPanel(
+                          visible: _showMenu,
+                          tab: _panelTab,
+                          onTabChanged: (tab) =>
+                              setState(() => _panelTab = tab),
+                          onClose: () => setState(() => _showMenu = false),
+                          title: widget.book.title,
+                          author: widget.book.author,
+                          progress: _sliderProgress,
+                          currentPage: _isDraggingSlider
+                              ? _previewPage
+                              : _currentPage,
+                          totalPages: _totalPages,
+                          onProgressChanged: (value) {
+                            setState(() {
+                              _isDraggingSlider = true;
+                              _sliderProgress = value;
+                              _previewPage = _totalPages <= 1
+                                  ? 1
+                                  : (value * (_totalPages - 1)).round() + 1;
+                            });
+                          },
+                          onProgressChangeEnd: (value) async {
+                            final target = _totalPages <= 1
+                                ? 1
+                                : (value * (_totalPages - 1)).round() + 1;
+                            if (_pageLocators.isNotEmpty) {
+                              await _navigateTo(_pageLocators[target - 1]);
+                            }
+                            if (!mounted) return;
+                            setState(() {
+                              _isDraggingSlider = false;
+                              _previewPage = _currentPage;
+                            });
+                          },
+                          canGoBack: _backHistory.isNotEmpty,
+                          canGoForward: _forwardHistory.isNotEmpty,
+                          onBackTap: () => unawaited(_goBackInReader()),
+                          onForwardTap: () => unawaited(_goForwardInReader()),
+                          onChaptersTap: _openContents,
+                          onBookmarksTap: _openBookmarks,
+                          onSearchTap: _openSearch,
+                          selectedTheme: _selectedTheme,
+                          onThemeSelected: (id) => unawaited(_setTheme(id)),
+                          fontFamily: _fontFamily,
+                          onFontChanged: (font) =>
+                              unawaited(_setFontFamily(font)),
+                          fontSize: _fontSize,
+                          onFontSizeChanged: (value) =>
+                              setState(() => _fontSize = value.clamp(80, 200)),
+                          margins: _pageMargins,
+                          onMarginsChanged: (value) =>
+                              setState(() => _pageMargins = value),
+                          lineHeight: _lineHeight,
+                          onLineHeightChanged: (value) =>
+                              setState(() => _lineHeight = value),
+                          brightness: _brightness,
+                          onBrightnessChanged: (value) =>
+                              setState(() => _brightness = value),
+                          hyphenate: _wordWrap,
+                          onHyphenateChanged: (value) =>
+                              unawaited(_setWordWrap(value)),
+                          onSettingsChangeEnd: () =>
+                              unawaited(_commitReaderStyle()),
+                        ),
+                      ),
 
                       if (_bookmarkMode)
                         Positioned(
@@ -1270,7 +1146,7 @@ class _ReaderScreenState extends State<ReaderScreen>
                             height: 70,
                             padding: const EdgeInsets.symmetric(horizontal: 12),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF6F2EC),
+                              gradient: ReaderPalette.panelGradient,
                               borderRadius: const BorderRadius.vertical(
                                 top: Radius.circular(28),
                               ),
@@ -1291,7 +1167,7 @@ class _ReaderScreenState extends State<ReaderScreen>
                                     width: 42,
                                     height: 4,
                                     decoration: BoxDecoration(
-                                      color: Color(0xFFD7CABB),
+                                      color: ReaderPalette.divider,
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                   ),
@@ -1341,7 +1217,7 @@ class _ReaderScreenState extends State<ReaderScreen>
                                               children: [
                                                 const Icon(
                                                   Icons.arrow_back,
-                                                  color: Color(0xFFA07A3F),
+                                                  color: ReaderPalette.accent,
                                                   size: 20,
                                                 ),
 
@@ -1350,7 +1226,7 @@ class _ReaderScreenState extends State<ReaderScreen>
                                                 Text(
                                                   '$_returnPage-бетке',
                                                   style: const TextStyle(
-                                                    color: Color(0xFFA07A3F),
+                                                    color: ReaderPalette.accent,
                                                     fontSize: 12,
                                                     fontWeight: FontWeight.w400,
                                                   ),
@@ -1401,12 +1277,14 @@ class _ReaderScreenState extends State<ReaderScreen>
                                               icon: const Icon(
                                                 Icons.chevron_left,
                                                 size: 24,
+                                                color: Colors.white,
                                               ),
                                             ),
 
                                             Text(
                                               '$_currentBookmarkIndex / ${_bookmarks.length}',
                                               style: const TextStyle(
+                                                color: Colors.white,
                                                 fontSize: 12,
                                                 fontWeight: FontWeight.w400,
                                               ),
@@ -1445,6 +1323,7 @@ class _ReaderScreenState extends State<ReaderScreen>
                                               icon: const Icon(
                                                 Icons.chevron_right,
                                                 size: 24,
+                                                color: Colors.white,
                                               ),
                                             ),
                                           ],
@@ -1461,6 +1340,7 @@ class _ReaderScreenState extends State<ReaderScreen>
                                             icon: const Icon(
                                               Icons.bookmarks_outlined,
                                               size: 24,
+                                              color: ReaderPalette.bookmark,
                                             ),
                                           ),
 
@@ -1492,9 +1372,8 @@ class _ReaderScreenState extends State<ReaderScreen>
                                                   height: 24,
                                                   decoration:
                                                       const BoxDecoration(
-                                                        color: Color(
-                                                          0xFFE7DCCF,
-                                                        ),
+                                                        color:
+                                                            ReaderPalette.card,
                                                         shape: BoxShape.circle,
                                                       ),
                                                   child: const Center(
@@ -1595,10 +1474,15 @@ class _ReaderLoading extends StatelessWidget {
   }
 }
 
+class _UnsupportedPlatform implements Exception {
+  const _UnsupportedPlatform();
+}
+
 class _ReaderLoadError extends StatelessWidget {
-  const _ReaderLoadError({required this.onRetry});
+  const _ReaderLoadError({required this.onRetry, this.unsupported = false});
 
   final VoidCallback onRetry;
+  final bool unsupported;
 
   @override
   Widget build(BuildContext context) {
@@ -1622,17 +1506,20 @@ class _ReaderLoadError extends StatelessWidget {
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 6),
-                const Text(
-                  'Файлды кайра жүктөп көрүңүз.',
+                Text(
+                  unsupported
+                      ? 'Азырынча китептерди веб-версияда гана окууга болот.'
+                      : 'Файлды кайра жүктөп көрүңүз.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Color(0xFF6E6258)),
+                  style: const TextStyle(color: Color(0xFF6E6258)),
                 ),
                 const SizedBox(height: 18),
-                FilledButton.icon(
-                  onPressed: onRetry,
-                  icon: const Icon(Icons.refresh_rounded),
-                  label: const Text('Кайра аракет кылуу'),
-                ),
+                if (!unsupported)
+                  FilledButton.icon(
+                    onPressed: onRetry,
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text('Кайра аракет кылуу'),
+                  ),
                 TextButton(
                   onPressed: () => Navigator.maybePop(context),
                   child: const Text('Артка кайтуу'),

@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 const { readFile } = require('node:fs/promises');
+const path = require('node:path');
 const { chromium } = require('playwright');
 
 const appUrl = process.env.KITAPP_URL || 'http://127.0.0.1:8083';
@@ -33,7 +34,7 @@ async function createBookFixture({ token, authorId, categoryId, data }) {
   );
   files.append(
     'epub',
-    new Blob([await readFile('assets/books/test.epub')], {
+    new Blob([await readFile(path.join(__dirname, 'fixtures/test.epub'))], {
       type: 'application/epub+zip',
     }),
     'book.epub',

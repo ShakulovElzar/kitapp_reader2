@@ -14,9 +14,10 @@ class PhoneAuthScreen extends StatefulWidget {
 }
 
 class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
-  final _phone = TextEditingController(text: '0555123456');
+  final _phone = TextEditingController();
   final _code = TextEditingController();
   bool _codeSent = false;
+  String? _developmentCode;
   bool _busy = false;
   String? _error;
   int _resendSeconds = 0;
@@ -31,10 +32,13 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
     try {
       final state = AppStateScope.of(context);
       if (!_codeSent) {
-        await state.requestOtp(_phone.text.trim());
+        final developmentCode = await state.requestOtp(_phone.text.trim());
         if (!mounted) return;
         _startResendTimer();
-        setState(() => _codeSent = true);
+        setState(() {
+          _codeSent = true;
+          _developmentCode = developmentCode;
+        });
       } else {
         await state.verifyOtp(_phone.text.trim(), _code.text.trim());
       }
@@ -120,6 +124,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                     keyboardType: TextInputType.phone,
                     decoration: const InputDecoration(
                       labelText: 'Телефон номери',
+                      hintText: '0700 123 456',
                       prefixIcon: Icon(Icons.phone_outlined),
                     ),
                   ),
@@ -176,12 +181,15 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                           )
                         : Text(_codeSent ? 'Кирүү' : 'Код алуу'),
                   ),
-                  if (_codeSent)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 14),
+                  if (_codeSent && _developmentCode != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 14),
                       child: Text(
-                        'Локалдык MVP коду: 111111',
-                        style: TextStyle(color: AppColors.muted, fontSize: 12),
+                        'Тест режими, код: $_developmentCode',
+                        style: const TextStyle(
+                          color: AppColors.muted,
+                          fontSize: 12,
+                        ),
                       ),
                     ),
                 ],

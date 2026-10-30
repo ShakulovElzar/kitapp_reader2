@@ -18,18 +18,18 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="Kitapp — кыргызча электрондук китептер">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="kitapp_reader2">
+  <meta name="apple-mobile-web-app-title" content="Kitapp">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>kitapp_reader2</title>
+  <title>Kitapp</title>
   <link rel="manifest" href="manifest.json">
   <style>
     /* Readium's bundled demo CSS reserves 96px for controls that Kitapp
@@ -40,6 +40,11 @@
       height: 100% !important;
       min-height: 100% !important;
       pointer-events: none;
+    }
+    /* The reader's platform view sits above Flutter's canvas in the DOM. Let taps
+       pass through so the Flutter panel and tap zones on top of it receive them. */
+    flt-platform-view:has(#container) {
+      pointer-events: none !important;
     }
     flt-semantics:not([role]):not([flt-tappable]) {
       pointer-events: none !important;
@@ -61,49 +66,56 @@
         }
       };
 
+      // Page styling goes through the Readium navigator so pagination re-flows;
+      // only search highlight styles are injected directly.
       const applyPreferences = () => {
         const content = readerDocument();
-        if (!content || !readerPreferences) return false;
-        const root = content.documentElement;
-        const body = content.body;
-        if (!root || !body) return false;
-        const values = readerPreferences;
+        if (!content?.head) return false;
         let style = content.getElementById('kitapp-reader-preferences');
         if (!style) {
           style = content.createElement('style');
           style.id = 'kitapp-reader-preferences';
-          content.head?.appendChild(style);
+          content.head.appendChild(style);
         }
         style.textContent = `
-          :root { font-size: ${values.fontSize}% !important; background: ${values.background} !important; }
-          html, body { background: ${values.background} !important; color: ${values.foreground} !important; }
-          body {
-            line-height: ${values.lineHeight} !important;
-            padding-left: ${values.margins}px !important;
-            padding-right: ${values.margins}px !important;
-            box-sizing: border-box !important;
-            overflow-wrap: ${values.wordWrap ? 'anywhere' : 'normal'} !important;
-            word-break: ${values.wordWrap ? 'normal' : 'keep-all'} !important;
-          }
-          body p, body li, body blockquote, body td, body dd, body dt {
-            font-size: 1rem !important;
-            line-height: ${values.lineHeight} !important;
-            color: ${values.foreground} !important;
-            overflow-wrap: ${values.wordWrap ? 'anywhere' : 'normal'} !important;
-          }
-          body h1, body h2, body h3, body h4, body h5, body h6,
-          body a, body span { color: ${values.foreground} !important; }
           .kitapp-pagebreak { display: inline !important; width: 0 !important; height: 0 !important; }
           mark[data-kitapp-search] { background: #ffe066 !important; color: #111 !important; border-radius: 2px; }
           mark[data-kitapp-search-active] { background: #ff9f1c !important; outline: 2px solid #ff9f1c; }
         `;
-        root.dataset.kitappFontSize = String(values.fontSize);
-        root.dataset.kitappTheme = values.theme;
-        root.dataset.kitappMargins = String(values.margins);
-        root.dataset.kitappLineHeight = String(values.lineHeight);
-        root.dataset.kitappWordWrap = String(values.wordWrap);
         return true;
       };
+
+      const applyNavigatorPreferences = () => {
+        const reader = window.kitappReader;
+        if (!reader?._nav || !readerPreferences) return false;
+        const values = readerPreferences;
+        reader.setEPUBPreferences(JSON.stringify({
+          fontSize: values.fontSize / 100,
+          fontFamily: values.fontFamily,
+          lineHeight: values.lineHeight,
+          pageMargins: values.margins,
+          backgroundColor: values.background,
+          textColor: values.foreground,
+          hyphens: values.wordWrap,
+          textAlign: 'justify',
+        }));
+        return true;
+      };
+
+      // Keep a handle on the reader instance Flutter creates, to reach its navigator.
+      const captureReader = () => {
+        const proto = window.ReadiumReader?.prototype;
+        if (!proto || proto.kitappWrapped) return;
+        const open = proto.openPublication;
+        proto.openPublication = async function (...args) {
+          window.kitappReader = this;
+          const result = await open.apply(this, args);
+          if (readerPreferences) retryReaderAction(applyNavigatorPreferences);
+          return result;
+        };
+        proto.kitappWrapped = true;
+      };
+      window.addEventListener('DOMContentLoaded', captureReader);
 
       const clearSearch = () => {
         const content = readerDocument();
@@ -177,6 +189,8 @@
 
       window.kitappApplyReaderPreferences = (json) => {
         readerPreferences = JSON.parse(json);
+        captureReader();
+        retryReaderAction(applyNavigatorPreferences);
         retryReaderAction(applyPreferences);
       };
 

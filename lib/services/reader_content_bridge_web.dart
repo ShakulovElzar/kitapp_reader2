@@ -15,6 +15,7 @@ external void _clearReaderSearch();
 
 void applyReaderContentPreferences({
   required int fontSize,
+  required String fontFamily,
   required double margins,
   required double lineHeight,
   required bool wordWrap,
@@ -25,6 +26,7 @@ void applyReaderContentPreferences({
   _applyReaderPreferences(
     jsonEncode({
       'fontSize': fontSize,
+      'fontFamily': fontFamily,
       'margins': margins,
       'lineHeight': lineHeight,
       'wordWrap': wordWrap,

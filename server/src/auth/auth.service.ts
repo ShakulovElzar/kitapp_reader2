@@ -1,19 +1,31 @@
 import {
   BadRequestException,
+  HttpException,
+  HttpStatus,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { randomInt } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AdminLoginDto, RequestOtpDto, VerifyOtpDto } from './auth.dto.js';
+import { SmsService } from './sms.service.js';
+
+const MAX_ATTEMPTS_PER_CODE = 5;
+const MAX_CODES_PER_PHONE_PER_HOUR = 5;
+const IP_WINDOW_MS = 10 * 60 * 1000;
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
+    private readonly sms: SmsService,
   ) {}
+
+  /** Recent OTP request times per client IP (in memory; fine for one server). */
+  private readonly ipRequests = new Map<string, number[]>();
 
   async adminLogin(dto: AdminLoginDto) {
     const admin = await this.prisma.admin.findUnique({
@@ -33,14 +45,23 @@ export class AuthService {
     };
   }
 
-  async requestOtp(dto: RequestOtpDto) {
+  async requestOtp(dto: RequestOtpDto, ip = 'unknown') {
     const phone = this.normalizePhone(dto.phone);
+    this.limitIp(ip);
     const recent = await this.prisma.otpCode.findFirst({
       where: { phone, createdAt: { gt: new Date(Date.now() - 60 * 1000) } },
       orderBy: { createdAt: 'desc' },
     });
     if (recent) throw new BadRequestException('Кодду кайра 60 секунддан кийин сураңыз');
-    const code = process.env.OTP_MODE === 'local' ? '111111' : this.randomCode();
+    const lastHour = await this.prisma.otpCode.count({
+      where: { phone, createdAt: { gt: new Date(Date.now() - 60 * 60 * 1000) } },
+    });
+    if (lastHour >= MAX_CODES_PER_PHONE_PER_HOUR) {
+      throw new HttpException('Өтө көп сурам. Бир сааттан кийин кайталаңыз', HttpStatus.TOO_MANY_REQUESTS);
+    }
+    const local = process.env.OTP_MODE === 'local';
+    const code = local ? '111111' : randomInt(100000, 1000000).toString();
+    await this.sms.sendCode(phone, code);
     const codeHash = await bcrypt.hash(code, 10);
     const reader = await this.prisma.reader.findUnique({ where: { phone } });
 
@@ -56,7 +77,7 @@ export class AuthService {
     return {
       phone,
       expiresInSeconds: 300,
-      ...(process.env.OTP_MODE === 'local' ? { developmentCode: code } : {}),
+      ...(local ? { developmentCode: code } : {}),
     };
   }
 
@@ -66,8 +87,22 @@ export class AuthService {
       where: { phone, usedAt: null, expiresAt: { gt: new Date() } },
       orderBy: { createdAt: 'desc' },
     });
-    if (!otp || !(await bcrypt.compare(dto.code, otp.codeHash))) {
-      throw new UnauthorizedException('Код туура эмес же мөөнөтү бүттү');
+    if (!otp) throw new UnauthorizedException('Код туура эмес же мөөнөтү бүттү');
+    if (otp.attempts >= MAX_ATTEMPTS_PER_CODE) {
+      throw new UnauthorizedException('Өтө көп туура эмес аракет. Жаңы код сураңыз');
+    }
+    if (!(await bcrypt.compare(dto.code, otp.codeHash))) {
+      const attempts = otp.attempts + 1;
+      await this.prisma.otpCode.update({
+        where: { id: otp.id },
+        // Burn the code once the attempt limit is reached.
+        data: { attempts, ...(attempts >= MAX_ATTEMPTS_PER_CODE ? { usedAt: new Date() } : {}) },
+      });
+      throw new UnauthorizedException(
+        attempts >= MAX_ATTEMPTS_PER_CODE
+          ? 'Өтө көп туура эмес аракет. Жаңы код сураңыз'
+          : 'Код туура эмес же мөөнөтү бүттү',
+      );
     }
 
     const reader = await this.prisma.reader.upsert({
@@ -104,7 +139,14 @@ export class AuthService {
     return phone;
   }
 
-  private randomCode() {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+  private limitIp(ip: string) {
+    const now = Date.now();
+    const recent = (this.ipRequests.get(ip) ?? []).filter((time) => now - time < IP_WINDOW_MS);
+    // Read at call time so the value from .env (loaded after imports) applies.
+    if (recent.length >= Number(process.env.OTP_IP_LIMIT ?? 10)) {
+      throw new HttpException('Өтө көп сурам. Бир аздан кийин кайталаңыз', HttpStatus.TOO_MANY_REQUESTS);
+    }
+    recent.push(now);
+    this.ipRequests.set(ip, recent);
   }
 }

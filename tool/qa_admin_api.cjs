@@ -112,10 +112,10 @@ async function rejected(path, expectedStatus, init = {}) {
     await request(`/admin/books/${book.id}`, { token: login.token, method: 'DELETE' });
     book = undefined;
 
-    const coverPath = path.resolve(__dirname, '../web/books/test/OPS/images/i_001.png');
+    const coverPath = path.resolve(__dirname, 'fixtures/cover.png');
     const epubPath = process.env.KITAPP_QA_EPUB
       ? path.resolve(process.env.KITAPP_QA_EPUB)
-      : path.resolve(__dirname, '../assets/books/test.epub');
+      : path.resolve(__dirname, 'fixtures/test.epub');
     const form = new FormData();
     form.set('data', JSON.stringify({
       title: `QA EPUB ${suffix}`,
@@ -161,7 +161,18 @@ async function rejected(path, expectedStatus, init = {}) {
       return response.json();
     });
     assert.equal(positions.metadata.numberOfItems, manifest.pageList.length);
-    assert.deepEqual(positions.positions, manifest.pageList);
+    // The paginated reader needs `total`, and position hrefs without #fragments.
+    assert.equal(positions.total, manifest.pageList.length);
+    assert.deepEqual(
+      positions.positions,
+      manifest.pageList.map((page) => ({ ...page, href: page.href.split('#')[0] })),
+    );
+    assert.equal(manifest.metadata.conformsTo, 'https://readium.org/webpub-manifest/profiles/epub');
+    assert.ok(manifest.metadata.identifier, 'each book needs its own identifier');
+    const unsigned = file.manifestUrl.replace(/\/files\/s\/[^/]+\//, '/files/');
+    assert.notEqual((await fetch(unsigned)).status, 200, 'book files must not be public');
+    const tampered = file.manifestUrl.replace(/\/files\/s\/(\d+)\./, '/files/s/$1.x');
+    assert.equal((await fetch(tampered)).status, 403, 'tampered links must be rejected');
     const generatedMarker = manifest.pageList.find((locator) =>
       locator.locations?.fragments?.[0]?.startsWith('kitapp-page-'),
     );

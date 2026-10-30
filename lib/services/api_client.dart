@@ -24,15 +24,20 @@ class ApiClient {
 
   final SharedPreferences _prefs;
 
+  /// Called after the server rejects the saved token (expired or revoked).
+  void Function()? onUnauthorized;
+
   String? get token => _prefs.getString('reader_token');
   String? get phone => _prefs.getString('reader_phone');
 
-  Future<void> requestOtp(String phone) async {
-    await _request(
+  /// Returns the code only when the server runs in local development mode.
+  Future<String?> requestOtp(String phone) async {
+    final value = await _request(
       '/auth/phone/request-otp',
       method: 'POST',
       body: {'phone': phone},
     );
+    return (value as Map<String, dynamic>?)?['developmentCode'] as String?;
   }
 
   Future<void> verifyOtp(String phone, String code) async {
@@ -136,11 +141,30 @@ class ApiClient {
       headers['Authorization'] = 'Bearer $value';
     }
     final uri = Uri.parse('$baseUrl$path');
-    final response = switch (method) {
-      'POST' => await http.post(uri, headers: headers, body: jsonEncode(body)),
-      _ => await http.get(uri, headers: headers),
-    };
-    final decoded = response.body.isEmpty ? null : jsonDecode(response.body);
+    final http.Response response;
+    try {
+      response = switch (method) {
+        'POST' => await http.post(
+          uri,
+          headers: headers,
+          body: jsonEncode(body),
+        ),
+        _ => await http.get(uri, headers: headers),
+      };
+    } catch (_) {
+      throw const ApiException('Серверге туташуу мүмкүн болгон жок');
+    }
+    if (authenticated && response.statusCode == 401) {
+      await logout();
+      onUnauthorized?.call();
+      throw const ApiException('Сессия бүттү. Кайра кириңиз');
+    }
+    dynamic decoded;
+    try {
+      decoded = response.body.isEmpty ? null : jsonDecode(response.body);
+    } on FormatException {
+      decoded = null;
+    }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final message = decoded is Map<String, dynamic>
           ? decoded['message']
