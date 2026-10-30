@@ -38,7 +38,7 @@ class ProfileScreen extends StatelessWidget {
               _ProfileRow(
                 icon: Icons.menu_book_rounded,
                 title: 'Сатып алуулар',
-                subtitle: '${state.libraryBooks.length} китеп жеткиликтүү',
+                subtitle: '${state.purchasedCount} китеп сатылып алынган',
                 onTap: () => _openInfo(
                   context,
                   'Сатып алуулар',

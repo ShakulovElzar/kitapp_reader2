@@ -1,10 +1,20 @@
 export type Dashboard = {
   books: number;
-  readers: number;
-  sales: number;
-  rentals: number;
-  revenue: number;
-  currency: string;
+  // Only present for SUPERADMIN.
+  readers?: number;
+  sales?: number;
+  activeRentals?: number;
+  salesRevenue?: number;
+  rentalRevenue?: number;
+  revenue?: number;
+  currency?: string;
+};
+
+export type AdminProfile = {
+  id: string;
+  name: string;
+  email: string;
+  role: 'SUPERADMIN' | 'EDITOR';
 };
 
 export type Author = { id: string; name: string; bio?: string; _count?: { books: number } };
@@ -56,13 +66,20 @@ export type Transaction = {
 export type SalesReport = {
   from: string;
   to: string;
+  timeZone: string;
   totalQuantity: number;
+  totalRentals: number;
+  salesRevenue: number;
+  rentalRevenue: number;
   totalRevenue: number;
   items: Array<{
     bookId: string;
     title: string;
     author: string;
     quantity: number;
+    rentals: number;
+    salesRevenue: number;
+    rentalRevenue: number;
     revenue: number;
   }>;
 };

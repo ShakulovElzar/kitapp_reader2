@@ -55,6 +55,7 @@ model Reader {
   rentals   Rental[]
   otpCodes  OtpCode[]
   readingProgress ReadingProgress[]
+  libraryEntries  LibraryEntry[]
 }
 
 model OtpCode {
@@ -119,6 +120,7 @@ model Book {
   purchases   Purchase[]
   rentals     Rental[]
   readingProgress ReadingProgress[]
+  libraryEntries  LibraryEntry[]
 
   @@index([status, deletedAt])
   @@index([authorId])
@@ -188,4 +190,16 @@ model ReadingProgress {
 
   @@unique([readerId, bookId])
   @@index([readerId, lastReadAt])
+}
+
+/// A free book the reader added to "My books" or opened.
+model LibraryEntry {
+  id        String   @id @default(cuid())
+  readerId  String
+  reader    Reader   @relation(fields: [readerId], references: [id])
+  bookId    String
+  book      Book     @relation(fields: [bookId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([readerId, bookId])
 }

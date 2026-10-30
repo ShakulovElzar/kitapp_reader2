@@ -16,7 +16,7 @@ export class PublicService {
   async catalog() {
     const books = await this.prisma.book.findMany({
       where: this.publicBookWhere(),
-      include: { author: true, category: true },
+      include: { author: true, category: true, _count: { select: { readingProgress: { where: { activeSeconds: { gte: 120 } } } } } },
       orderBy: [{ isNew: 'desc' }, { publishedAt: 'desc' }],
     });
     return Promise.all(books.map((book) => this.presentBook(book)));
@@ -32,7 +32,7 @@ export class PublicService {
   async book(slug: string) {
     const book = await this.prisma.book.findFirst({
       where: { slug, ...this.publicBookWhere() },
-      include: { author: true, category: true },
+      include: { author: true, category: true, _count: { select: { readingProgress: { where: { activeSeconds: { gte: 120 } } } } } },
     });
     if (!book) throw new NotFoundException('Китеп табылган жок');
     return this.presentBook(book);
@@ -41,7 +41,11 @@ export class PublicService {
   async buy(readerId: string, bookId: string) {
     const book = await this.requirePublishedBook(bookId);
     if (book.accessType === AccessType.FREE) {
+      await this.addToLibrary(readerId, bookId);
       return { success: true, accessType: AccessType.FREE };
+    }
+    if (book.accessType === AccessType.RENTAL) {
+      throw new BadRequestException('Бул китеп ижарага гана берилет');
     }
     const existing = await this.prisma.purchase.findFirst({
       where: { readerId, bookId, status: PaymentStatus.COMPLETED },
@@ -55,7 +59,9 @@ export class PublicService {
 
   async rent(readerId: string, bookId: string) {
     const book = await this.requirePublishedBook(bookId);
-    if (!book.rentalPrice) throw new BadRequestException('Бул китеп ижарага берилбейт');
+    if (book.accessType === AccessType.FREE || !book.rentalPrice) {
+      throw new BadRequestException('Бул китеп ижарага берилбейт');
+    }
     const [purchase, activeRental] = await Promise.all([
       this.prisma.purchase.findFirst({ where: { readerId, bookId, status: PaymentStatus.COMPLETED } }),
       this.prisma.rental.findFirst({ where: { readerId, bookId, status: PaymentStatus.COMPLETED, endsAt: { gt: new Date() } } }),
@@ -76,24 +82,36 @@ export class PublicService {
     return { success: true, rental };
   }
 
+  /**
+   * "My books": everything bought (even if later archived), active rentals, and free
+   * books the reader added or opened while they are still in the catalog.
+   */
   async library(readerId: string) {
-    const [purchases, rentals, freeBooks] = await Promise.all([
+    const ownedBook = { epubKey: { not: null } } as const;
+    const [purchases, rentals, entries] = await Promise.all([
       this.prisma.purchase.findMany({
-        where: { readerId, status: PaymentStatus.COMPLETED, book: this.publicBookWhere() },
+        where: { readerId, status: PaymentStatus.COMPLETED, book: ownedBook },
         include: { book: { include: { author: true, category: true } } },
       }),
       this.prisma.rental.findMany({
-        where: { readerId, status: PaymentStatus.COMPLETED, endsAt: { gt: new Date() }, book: this.publicBookWhere() },
+        where: { readerId, status: PaymentStatus.COMPLETED, endsAt: { gt: new Date() }, book: ownedBook },
         include: { book: { include: { author: true, category: true } } },
+        orderBy: { endsAt: 'desc' },
       }),
-      this.prisma.book.findMany({
-        where: { accessType: AccessType.FREE, ...this.publicBookWhere() },
-        include: { author: true, category: true },
+      this.prisma.libraryEntry.findMany({
+        where: { readerId, book: { accessType: AccessType.FREE, ...this.publicBookWhere() } },
+        include: { book: { include: { author: true, category: true } } },
+        orderBy: { createdAt: 'desc' },
       }),
     ]);
-    const unique = new Map<string, { book: (typeof freeBooks)[number]; readerAccess: string; rentalEndsAt?: Date }>();
-    for (const book of freeBooks) unique.set(book.id, { book, readerAccess: AccessType.FREE });
-    for (const item of rentals) unique.set(item.book.id, { book: item.book, readerAccess: AccessType.RENTAL, rentalEndsAt: item.endsAt });
+    type Item = { book: (typeof entries)[number]['book']; readerAccess: string; rentalEndsAt?: Date };
+    const unique = new Map<string, Item>();
+    for (const item of entries) unique.set(item.book.id, { book: item.book, readerAccess: AccessType.FREE });
+    for (const item of rentals) {
+      if (!unique.has(item.book.id) || unique.get(item.book.id)!.readerAccess === AccessType.FREE) {
+        unique.set(item.book.id, { book: item.book, readerAccess: AccessType.RENTAL, rentalEndsAt: item.endsAt });
+      }
+    }
     for (const item of purchases) unique.set(item.book.id, { book: item.book, readerAccess: AccessType.PURCHASE });
     return Promise.all([...unique.values()].map(async (item) => ({
       ...await this.presentBook(item.book),
@@ -103,28 +121,21 @@ export class PublicService {
   }
 
   async readerFile(readerId: string, bookId: string) {
-    const book = await this.prisma.book.findFirst({
-      where: { id: bookId, coverKey: { not: null }, epubKey: { not: null } },
-    });
-    if (!book) throw new NotFoundException('Китеп табылган жок');
-    const hasPurchase = await this.prisma.purchase.findFirst({
-      where: { readerId, bookId, status: PaymentStatus.COMPLETED },
-    });
-    const hasRental = await this.prisma.rental.findFirst({
-      where: { readerId, bookId, status: PaymentStatus.COMPLETED, endsAt: { gt: new Date() } },
-    });
-    const isPublicFree = book.status === BookStatus.PUBLISHED && !book.deletedAt
-      && book.accessType === AccessType.FREE;
-    if (!isPublicFree && !hasPurchase && !hasRental) {
+    const book = await this.prisma.book.findFirst({ where: { id: bookId, epubKey: { not: null } } });
+    if (!book?.epubKey) throw new NotFoundException('Китеп табылган жок');
+    if (!(await this.hasAccess(readerId, book))) {
       throw new BadRequestException('Китепке жеткилик жок');
     }
-    if (!book.epubKey) throw new NotFoundException('EPUB файлы жүктөлө элек');
+    if (book.accessType === AccessType.FREE) await this.addToLibrary(readerId, bookId);
     const url = await this.storage.signedUrl(book.epubKey);
     return { url, manifestUrl: url };
   }
 
   async saveProgress(readerId: string, dto: ReadingProgressDto) {
-    await this.requirePublishedBook(dto.bookId);
+    const book = await this.prisma.book.findUnique({ where: { id: dto.bookId } });
+    if (!book || !(await this.hasAccess(readerId, book))) {
+      throw new NotFoundException('Китеп табылган жок');
+    }
     return this.prisma.readingProgress.upsert({
       where: { readerId_bookId: { readerId, bookId: dto.bookId } },
       create: {
@@ -138,17 +149,56 @@ export class PublicService {
     });
   }
 
+  /** Where the reader stopped in a book, so another device can resume there. */
+  async readingPosition(readerId: string, bookId: string) {
+    const progress = await this.prisma.readingProgress.findUnique({
+      where: { readerId_bookId: { readerId, bookId } },
+      select: { locator: true, progression: true, lastReadAt: true },
+    });
+    return progress ?? { locator: null, progression: 0, lastReadAt: null };
+  }
+
   async recent(readerId: string) {
     const items = await this.prisma.readingProgress.findMany({
-      where: { readerId, activeSeconds: { gte: 120 }, book: { status: BookStatus.PUBLISHED, deletedAt: null } },
+      where: { readerId, activeSeconds: { gte: 120 } },
       include: { book: { include: { author: true, category: true } } },
       orderBy: { lastReadAt: 'desc' },
-      take: 3,
+      take: 10,
     });
-    return Promise.all(items.map(async (item) => ({
+    const visible = [];
+    for (const item of items) {
+      if (visible.length === 3) break;
+      if (await this.hasAccess(readerId, item.book)) visible.push(item);
+    }
+    return Promise.all(visible.map(async (item) => ({
       ...item,
       book: await this.presentBook(item.book),
     })));
+  }
+
+  /** Bought or actively rented books stay readable even after they leave the catalog. */
+  private async hasAccess(
+    readerId: string,
+    book: { id: string; accessType: AccessType; status: BookStatus; deletedAt: Date | null; coverKey: string | null; epubKey: string | null },
+  ) {
+    const isPublic = book.status === BookStatus.PUBLISHED && !book.deletedAt && Boolean(book.coverKey && book.epubKey);
+    if (book.accessType === AccessType.FREE) return isPublic;
+    const [purchase, rental] = await Promise.all([
+      this.prisma.purchase.findFirst({ where: { readerId, bookId: book.id, status: PaymentStatus.COMPLETED }, select: { id: true } }),
+      this.prisma.rental.findFirst({
+        where: { readerId, bookId: book.id, status: PaymentStatus.COMPLETED, endsAt: { gt: new Date() } },
+        select: { id: true },
+      }),
+    ]);
+    return Boolean(purchase || rental);
+  }
+
+  private async addToLibrary(readerId: string, bookId: string) {
+    await this.prisma.libraryEntry.upsert({
+      where: { readerId_bookId: { readerId, bookId } },
+      create: { readerId, bookId },
+      update: {},
+    });
   }
 
   private async requirePublishedBook(id: string) {
@@ -168,12 +218,22 @@ export class PublicService {
     } as const;
   }
 
-  private async presentBook<T extends { coverKey: string | null; price: unknown; rentalPrice: unknown }>(book: T) {
+  private async presentBook<T extends {
+    coverKey: string | null;
+    epubKey?: string | null;
+    price: unknown;
+    rentalPrice: unknown;
+    _count?: { readingProgress?: number };
+  }>(book: T) {
+    const { _count, ...rest } = book;
     return {
-      ...book,
+      ...rest,
       price: Number(book.price),
       rentalPrice: book.rentalPrice == null ? null : Number(book.rentalPrice),
       coverUrl: book.coverKey ? await this.storage.signedUrl(book.coverKey) : null,
+      // Language comes from the EPUB itself; readers = people who read at least 2 minutes.
+      language: book.epubKey ? await this.storage.publicationLanguage(book.epubKey) : null,
+      readersCount: _count?.readingProgress ?? null,
     };
   }
 }

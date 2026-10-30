@@ -1,6 +1,7 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from 'react';
 import { api, auth } from './api';
 import type {
+  AdminProfile,
   AuditLog,
   Author,
   Book,
@@ -13,14 +14,14 @@ import type {
 
 type Page = 'dashboard' | 'books' | 'directories' | 'readers' | 'orders' | 'reports' | 'audit';
 
-const navigation: Array<{ id: Page; icon: string; label: string }> = [
+const navigation: Array<{ id: Page; icon: string; label: string; superOnly?: boolean }> = [
   { id: 'dashboard', icon: '⌂', label: 'Башкы бет' },
   { id: 'books', icon: '▤', label: 'Китептер' },
   { id: 'directories', icon: '◫', label: 'Авторлор жана жанрлар' },
-  { id: 'readers', icon: '♙', label: 'Окурмандар' },
-  { id: 'orders', icon: '₸', label: 'Сатуулар жана ижара' },
-  { id: 'reports', icon: '↗', label: 'Отчёттор' },
-  { id: 'audit', icon: '✓', label: 'Аракеттер журналы' },
+  { id: 'readers', icon: '♙', label: 'Окурмандар', superOnly: true },
+  { id: 'orders', icon: '₸', label: 'Сатуулар жана ижара', superOnly: true },
+  { id: 'reports', icon: '↗', label: 'Отчёттор', superOnly: true },
+  { id: 'audit', icon: '✓', label: 'Аракеттер журналы', superOnly: true },
 ];
 
 const som = (value: string | number) => `${Number(value).toLocaleString('ru-RU')} сом`;
@@ -82,42 +83,46 @@ function Login({ onSuccess }: { onSuccess: () => void }) {
 
 function AdminShell({ onLogout }: { onLogout: () => void }) {
   const [page, setPage] = useState<Page>('dashboard');
-  const active = navigation.find((item) => item.id === page)!;
+  const [profile, setProfile] = useState<AdminProfile | null>(null);
+  useEffect(() => { void api<AdminProfile>('/admin/me').then(setProfile).catch(() => undefined); }, []);
+  const isSuper = profile?.role === 'SUPERADMIN';
+  const pages = navigation.filter((item) => !item.superOnly || isSuper);
+  const active = pages.find((item) => item.id === page) ?? pages[0];
   return (
     <div className="admin-shell">
       <aside className="sidebar">
         <Logo />
         <nav>
-          {navigation.map((item) => (
+          {pages.map((item) => (
             <button key={item.id} className={page === item.id ? 'active' : ''} onClick={() => setPage(item.id)}>
               <span>{item.icon}</span>{item.label}
             </button>
           ))}
         </nav>
         <div className="sidebar-user">
-          <div className="avatar">БА</div>
-          <div><strong>Башкы админ</strong><small>Superadmin</small></div>
+          <div className="avatar">{(profile?.name ?? '?').slice(0, 2).toUpperCase()}</div>
+          <div><strong>{profile?.name ?? '…'}</strong><small>{isSuper ? 'Башкы админ' : 'Редактор'}</small></div>
           <button title="Чыгуу" onClick={onLogout}>↪</button>
         </div>
       </aside>
       <main className="workspace">
         <header className="topbar">
           <div><span className="eyebrow">KITAPP БАШКАРУУ</span><h1>{active.label}</h1></div>
-          <div className="live"><i /> Система иштеп жатат</div>
+
         </header>
-        {page === 'dashboard' && <DashboardPage onNavigate={setPage} />}
-        {page === 'books' && <BooksPage />}
-        {page === 'directories' && <DirectoriesPage />}
-        {page === 'readers' && <ReadersPage />}
-        {page === 'orders' && <OrdersPage />}
-        {page === 'reports' && <ReportsPage />}
-        {page === 'audit' && <AuditPage />}
+        {active.id === 'dashboard' && <DashboardPage onNavigate={setPage} isSuper={isSuper} />}
+        {active.id === 'books' && <BooksPage />}
+        {active.id === 'directories' && <DirectoriesPage />}
+        {isSuper && active.id === 'readers' && <ReadersPage />}
+        {isSuper && active.id === 'orders' && <OrdersPage />}
+        {isSuper && active.id === 'reports' && <ReportsPage />}
+        {isSuper && active.id === 'audit' && <AuditPage />}
       </main>
     </div>
   );
 }
 
-function DashboardPage({ onNavigate }: { onNavigate: (page: Page) => void }) {
+function DashboardPage({ onNavigate, isSuper }: { onNavigate: (page: Page) => void; isSuper: boolean }) {
   const [data, setData] = useState<Dashboard | null>(null);
   const [books, setBooks] = useState<Book[]>([]);
   useEffect(() => { void Promise.all([api<Dashboard>('/admin/dashboard'), api<Book[]>('/admin/books')]).then(([d, b]) => { setData(d); setBooks(b.slice(0, 5)); }); }, []);
@@ -126,9 +131,11 @@ function DashboardPage({ onNavigate }: { onNavigate: (page: Page) => void }) {
     <div className="page-grid">
       <section className="metrics">
         <Metric label="Китептер" value={data.books} note="Каталогдогу жалпы сан" tone="green" />
-        <Metric label="Окурмандар" value={data.readers} note="Катталган аккаунттар" tone="blue" />
-        <Metric label="Сатуулар" value={data.sales} note="Ийгиликтүү сатып алуулар" tone="orange" />
-        <Metric label="Киреше" value={som(data.revenue)} note={`${data.rentals} активдүү ижара`} tone="rose" />
+        {data.revenue !== undefined && <>
+          <Metric label="Окурмандар" value={data.readers ?? 0} note="Катталган аккаунттар" tone="blue" />
+          <Metric label="Сатуулар" value={data.sales ?? 0} note={`${data.activeRentals ?? 0} активдүү ижара`} tone="orange" />
+          <Metric label="Киреше" value={som(data.revenue)} note={`Сатуу ${som(data.salesRevenue ?? 0)} · ижара ${som(data.rentalRevenue ?? 0)}`} tone="rose" />
+        </>}
       </section>
       <section className="panel span-2">
         <PanelHeader title="Акыркы китептер" action="Баарын көрүү" onAction={() => onNavigate('books')} />
@@ -137,8 +144,8 @@ function DashboardPage({ onNavigate }: { onNavigate: (page: Page) => void }) {
       <section className="panel quick-panel">
         <PanelHeader title="Тез аракеттер" />
         <button onClick={() => onNavigate('books')}><b>＋</b><span>Жаңы китеп кошуу<small>EPUB жана мукаба жүктөө</small></span></button>
-        <button onClick={() => onNavigate('reports')}><b>↗</b><span>Сатуу отчёту<small>Мезгил боюнча талдоо</small></span></button>
-        <button onClick={() => onNavigate('readers')}><b>♙</b><span>Окурмандар<small>Аккаунттарды башкаруу</small></span></button>
+        {isSuper && <button onClick={() => onNavigate('reports')}><b>↗</b><span>Сатуу отчёту<small>Мезгил боюнча талдоо</small></span></button>}
+        {isSuper && <button onClick={() => onNavigate('readers')}><b>♙</b><span>Окурмандар<small>Аккаунттарды башкаруу</small></span></button>}
       </section>
     </div>
   );
@@ -192,8 +199,9 @@ function BooksPage() {
       const payload = {
         ...form,
         price: form.accessType === 'FREE' ? 0 : form.price,
-        rentalPrice: form.accessType === 'RENTAL' ? form.rentalPrice : undefined,
-        rentalDays: form.accessType === 'RENTAL' ? form.rentalDays : undefined,
+        // FREE: no rental. PURCHASE: rental is optional (0 = off). RENTAL: required.
+        rentalPrice: form.accessType === 'FREE' || !form.rentalPrice ? null : form.rentalPrice,
+        rentalDays: form.accessType === 'FREE' ? undefined : form.rentalDays,
       };
       if (!editing) {
         const files = new FormData();
@@ -236,9 +244,9 @@ function BooksPage() {
             <Field label="Автор"><select value={form.authorId} onChange={(e) => setForm({ ...form, authorId: e.target.value })} required><option value="">Тандаңыз</option>{authors.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></Field>
             <Field label="Категория"><select value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })} required><option value="">Тандаңыз</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
             <Field label="Жеткиликтүүлүк"><select value={form.accessType} onChange={(e) => setForm({ ...form, accessType: e.target.value as Book['accessType'] })}><option value="FREE">Акысыз</option><option value="PURCHASE">Сатып алуу</option><option value="RENTAL">Ижара</option></select></Field>
-            {form.accessType !== 'FREE' && <Field label="Баасы"><input type="number" min="0" value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} required /></Field>}
-            {form.accessType === 'RENTAL' && <Field label="Ижара баасы"><input type="number" min="1" value={form.rentalPrice} onChange={(e) => setForm({ ...form, rentalPrice: Number(e.target.value) })} required /></Field>}
-            {form.accessType === 'RENTAL' && <Field label="Ижара мөөнөтү (күн)"><input type="number" min="1" value={form.rentalDays} onChange={(e) => setForm({ ...form, rentalDays: Number(e.target.value) })} required /></Field>}
+            {form.accessType !== 'FREE' && <Field label="Баасы"><input type="number" min="1" value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} required /></Field>}
+            {form.accessType !== 'FREE' && <Field label={form.accessType === 'RENTAL' ? 'Ижара баасы' : 'Ижара баасы (0 = ижара жок)'}><input type="number" min={form.accessType === 'RENTAL' ? 1 : 0} value={form.rentalPrice} onChange={(e) => setForm({ ...form, rentalPrice: Number(e.target.value) })} required /></Field>}
+            {form.accessType !== 'FREE' && <Field label="Ижара мөөнөтү (күн)"><input type="number" min="1" value={form.rentalDays} onChange={(e) => setForm({ ...form, rentalDays: Number(e.target.value) })} required /></Field>}
             <Field label="Беттер"><input type="number" min="1" value={form.pages} onChange={(e) => setForm({ ...form, pages: Number(e.target.value) })} /></Field>
             <Field label="Статус"><select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as Book['status'] })}><option value="DRAFT">Долбоор</option><option value="PUBLISHED">Жарыяланган</option></select></Field>
             <Field label={`Мукаба${editing ? '' : ' *'}`}><input type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" onChange={(e) => setCover(e.target.files?.[0] ?? null)} required={!editing} /></Field>
@@ -294,10 +302,10 @@ function OrdersPage() {
 }
 
 function ReportsPage() {
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-  const [from, setFrom] = useState(monthStart);
-  const [to, setTo] = useState(now.toISOString().slice(0, 10));
+  // Report days are Bishkek calendar days (UTC+6).
+  const today = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const [from, setFrom] = useState(`${today.slice(0, 7)}-01`);
+  const [to, setTo] = useState(today);
   const [report, setReport] = useState<SalesReport | null>(null);
   const [error, setError] = useState('');
   async function load() {
@@ -309,11 +317,11 @@ function ReportsPage() {
     }
   }
   useEffect(() => { void load(); }, []);
-  const maximum = useMemo(() => Math.max(1, ...(report?.items.map((item) => item.quantity) ?? [1])), [report]);
+  const maximum = useMemo(() => Math.max(1, ...(report?.items.map((item) => item.revenue) ?? [1])), [report]);
   return (
     <div className="report-page">
-      <section className="panel report-filter"><div><h2>Китеп сатуу отчёту</h2><p>Кайсы автордун кайсы китеби канча сатылганын көрүңүз.</p>{error && <div className="alert error">{error}</div>}</div><div className="date-filter"><Field label="Башталган күн"><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></Field><Field label="Аяктаган күн"><input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></Field><button className="primary" onClick={() => void load()}>Көрсөтүү</button></div></section>
-      {report ? <><section className="metrics two"><Metric label="Сатылган китеп" value={report.totalQuantity} note={`${from} — ${to}`} tone="green" /><Metric label="Жалпы киреше" value={som(report.totalRevenue)} note="Кайтаруулар эсептелбейт" tone="orange" /></section><section className="panel"><PanelHeader title="Китептер жана авторлор боюнча" /><div className="table-wrap"><table><thead><tr><th>Китеп</th><th>Автор</th><th>Сатылганы</th><th>Үлүшү</th><th>Киреше</th></tr></thead><tbody>{report.items.map((item) => <tr key={item.bookId}><td><strong>{item.title}</strong></td><td>{item.author}</td><td><strong>{item.quantity}</strong></td><td><div className="bar"><i style={{ width: `${(item.quantity / maximum) * 100}%` }} /></div></td><td><strong>{som(item.revenue)}</strong></td></tr>)}{!report.items.length && <tr><td colSpan={5}><Empty text="Бул мезгилде сатуу болгон жок" /></td></tr>}</tbody></table></div></section></> : <Loading />}
+      <section className="panel report-filter"><div><h2>Сатуу жана ижара отчёту</h2><p>Кайсы китеп канча сатылганын жана ижарага алынганын көрүңүз (Бишкек убакыты).</p>{error && <div className="alert error">{error}</div>}</div><div className="date-filter"><Field label="Башталган күн"><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></Field><Field label="Аяктаган күн"><input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></Field><button className="primary" onClick={() => void load()}>Көрсөтүү</button></div></section>
+      {report ? <><section className="metrics"><Metric label="Сатылган китеп" value={report.totalQuantity} note={`${report.from} — ${report.to}`} tone="green" /><Metric label="Ижаралар" value={report.totalRentals} note={som(report.rentalRevenue)} tone="blue" /><Metric label="Сатуудан киреше" value={som(report.salesRevenue)} note="Кайтаруулар эсептелбейт" tone="orange" /><Metric label="Жалпы киреше" value={som(report.totalRevenue)} note="Сатуу + ижара" tone="rose" /></section><section className="panel"><PanelHeader title="Китептер жана авторлор боюнча" /><div className="table-wrap"><table><thead><tr><th>Китеп</th><th>Автор</th><th>Сатылганы</th><th>Ижара</th><th>Үлүшү</th><th>Киреше</th></tr></thead><tbody>{report.items.map((item) => <tr key={item.bookId}><td><strong>{item.title}</strong></td><td>{item.author}</td><td><strong>{item.quantity}</strong></td><td>{item.rentals}</td><td><div className="bar"><i style={{ width: `${(item.revenue / maximum) * 100}%` }} /></div></td><td><strong>{som(item.revenue)}</strong></td></tr>)}{!report.items.length && <tr><td colSpan={6}><Empty text="Бул мезгилде сатуу болгон жок" /></td></tr>}</tbody></table></div></section></> : <Loading />}
     </div>
   );
 }

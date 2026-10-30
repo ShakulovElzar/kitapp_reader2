@@ -50,7 +50,9 @@ class CatalogScreen extends StatelessWidget {
       );
     }
     final newest = books.where((book) => book.isNew).toList();
-    final popular = [...books]..sort((a, b) => b.rating.compareTo(a.rating));
+    // "Most read" = most readers who spent at least two minutes in the book.
+    final popular = books.where((book) => book.readersCount > 0).toList()
+      ..sort((a, b) => b.readersCount.compareTo(a.readersCount));
     final authors = books.reversed.toList();
     final categories = books.map((book) => book.category).toSet().toList()
       ..sort();
@@ -172,12 +174,13 @@ class CatalogScreen extends StatelessWidget {
             onBookTap: (book) => _openBook(context, book),
             onAllTap: () => _openSearch(context),
           ),
-          _BookSection(
-            title: 'Эң көп окулгандар',
-            books: popular.take(7).toList(),
-            onBookTap: (book) => _openBook(context, book),
-            onAllTap: () => _openSearch(context),
-          ),
+          if (popular.isNotEmpty)
+            _BookSection(
+              title: 'Эң көп окулгандар',
+              books: popular.take(7).toList(),
+              onBookTap: (book) => _openBook(context, book),
+              onAllTap: () => _openSearch(context),
+            ),
           _BookSection(
             title: 'Жаңы авторлор',
             books: authors.take(7).toList(),

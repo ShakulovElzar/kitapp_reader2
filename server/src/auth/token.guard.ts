@@ -1,6 +1,7 @@
 import {
   CanActivate,
   ExecutionContext,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -22,8 +23,11 @@ abstract class TokenGuard implements CanActivate {
     protected readonly prisma: PrismaService,
   ) {}
 
-  /** Checks the account still exists and may sign in; runs on every request. */
-  protected abstract isActive(id: string): Promise<boolean>;
+  /**
+   * Loads the account on every request: null if it no longer exists or may not
+   * sign in. The returned role (admins) replaces whatever the token says.
+   */
+  protected abstract loadAccount(id: string): Promise<{ role?: string } | null>;
 
   async canActivate(context: ExecutionContext) {
     const request = context.switchToHttp().getRequest<Request & { auth?: TokenPayload }>();
@@ -38,10 +42,11 @@ abstract class TokenGuard implements CanActivate {
     } catch {
       throw new UnauthorizedException('Токен жараксыз');
     }
-    if (!(await this.isActive(payload.sub))) {
+    const account = await this.loadAccount(payload.sub);
+    if (!account) {
       throw new UnauthorizedException('Аккаунт бөгөттөлгөн же өчүрүлгөн');
     }
-    request.auth = payload;
+    request.auth = { ...payload, role: account.role };
     return true;
   }
 }
@@ -54,8 +59,8 @@ export class AdminGuard extends TokenGuard {
     super(jwt, prisma);
   }
 
-  protected async isActive(id: string) {
-    return Boolean(await this.prisma.admin.findUnique({ where: { id }, select: { id: true } }));
+  protected loadAccount(id: string) {
+    return this.prisma.admin.findUnique({ where: { id }, select: { role: true } });
   }
 }
 
@@ -67,11 +72,21 @@ export class ReaderGuard extends TokenGuard {
     super(jwt, prisma);
   }
 
-  protected async isActive(id: string) {
+  protected async loadAccount(id: string) {
     const reader = await this.prisma.reader.findUnique({
       where: { id },
       select: { isBlocked: true, deletedAt: true },
     });
-    return Boolean(reader && !reader.isBlocked && !reader.deletedAt);
+    return reader && !reader.isBlocked && !reader.deletedAt ? {} : null;
+  }
+}
+
+/** Use after AdminGuard: revenue, readers, blocking and the audit log are SUPERADMIN only. */
+@Injectable()
+export class SuperAdminGuard implements CanActivate {
+  canActivate(context: ExecutionContext) {
+    const request = context.switchToHttp().getRequest<Request & { auth?: TokenPayload }>();
+    if (request.auth?.type === 'admin' && request.auth.role === 'SUPERADMIN') return true;
+    throw new ForbiddenException('Бул бөлүм башкы админ үчүн гана');
   }
 }

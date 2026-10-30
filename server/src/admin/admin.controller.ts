@@ -17,7 +17,7 @@ import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import type { Request } from 'express';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
-import { AdminGuard, type TokenPayload } from '../auth/token.guard.js';
+import { AdminGuard, SuperAdminGuard, type TokenPayload } from '../auth/token.guard.js';
 import {
   BlockReaderDto,
   CreateAuthorDto,
@@ -36,8 +36,13 @@ type AdminRequest = Request & { auth: TokenPayload };
 export class AdminController {
   constructor(private readonly service: AdminService) {}
 
+  @Get('me')
+  me(@Req() req: AdminRequest) { return this.service.me(req.auth.sub); }
+
   @Get('dashboard')
-  dashboard() { return this.service.dashboard(); }
+  dashboard(@Req() req: AdminRequest) {
+    return this.service.dashboard(req.auth.role === 'SUPERADMIN');
+  }
 
   @Get('authors')
   authors() { return this.service.listAuthors(); }
@@ -129,9 +134,11 @@ export class AdminController {
   }
 
   @Get('readers')
+  @UseGuards(SuperAdminGuard)
   readers() { return this.service.listReaders(); }
 
   @Patch('readers/:id/block')
+  @UseGuards(SuperAdminGuard)
   blockReader(
     @Param('id') id: string,
     @Body() dto: BlockReaderDto,
@@ -141,16 +148,20 @@ export class AdminController {
   }
 
   @Get('purchases')
+  @UseGuards(SuperAdminGuard)
   purchases() { return this.service.listPurchases(); }
 
   @Get('rentals')
+  @UseGuards(SuperAdminGuard)
   rentals() { return this.service.listRentals(); }
 
   @Get('reports/sales')
+  @UseGuards(SuperAdminGuard)
   salesReport(@Query('from') from?: string, @Query('to') to?: string) {
     return this.service.salesReport(from, to);
   }
 
   @Get('audit-logs')
+  @UseGuards(SuperAdminGuard)
   auditLogs() { return this.service.auditLogs(); }
 }

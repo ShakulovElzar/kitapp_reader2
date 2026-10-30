@@ -4,6 +4,7 @@ import 'package:flureadium/flureadium.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../state/app_state.dart';
 import '../theme/reader_palette.dart';
 import 'contents_sheet.dart';
 
@@ -28,8 +29,10 @@ class _BookmarksSheetState extends State<BookmarksSheet> {
   Map<String, String> _titles = const {};
   String _search = '';
 
-  String get _bookmarksKey => 'bookmarks_${widget.bookId}';
-  String get _titlesKey => 'bookmark_titles_${widget.bookId}';
+  String get _bookmarksKey =>
+      AppStateScope.read(context).api.userKey('bookmarks_${widget.bookId}');
+  String get _titlesKey =>
+      AppStateScope.read(context).api.userKey('bookmark_titles_${widget.bookId}');
 
   @override
   void initState() {

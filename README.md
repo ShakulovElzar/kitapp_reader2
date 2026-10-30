@@ -5,7 +5,7 @@ NestJS API жана кыргыз тилиндеги веб-админка.
 
 ## Локалдык иштетүү
 
-Талаптар: Node.js, Flutter, Docker Desktop.
+Талаптар: Node.js, Flutter, Docker Desktop (PostgreSQL үчүн). Китеп файлдары `server/storage` папкасында сакталат.
 
 ```bash
 npm install
@@ -24,9 +24,9 @@ npm run dev:admin
 
 - Админка: http://127.0.0.1:5173
 - API: http://127.0.0.1:3000/api
-- MinIO: http://127.0.0.1:9001
 - PostgreSQL: `127.0.0.1:55432`
 - Админ: `admin@kitapp.kg` / `Kitapp123!`
+- Редактор (`EDITOR_EMAIL` коюлса): `editor@kitapp.kg` / `Editor123!`
 - Локалдык SMS-код: `111111`
 
 Flutter веб-тиркемесин өзүнчө иштетүү:
@@ -47,7 +47,7 @@ flutter run -d web-server --web-port 8083
 
 ```bash
 npm run check
-node tool/qa_admin_api.cjs
+npm run qa:api   # өзүнчө kitapp_test базасында API сценарийлери
 flutter analyze
 flutter test
 ```

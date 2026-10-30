@@ -78,11 +78,13 @@ class _ReaderScreenState extends State<ReaderScreen>
 
   String get _bookId => widget.book.id;
 
-  String get _locatorKey => 'locator_$_bookId';
+  String get _locatorKey => _api!.userKey('locator_$_bookId');
 
-  String get _pageKey => 'reader_page_$_bookId';
+  String get _locatorTimeKey => _api!.userKey('locator_at_$_bookId');
 
-  String get _bookmarksKey => 'bookmarks_$_bookId';
+  String get _pageKey => _api!.userKey('reader_page_$_bookId');
+
+  String get _bookmarksKey => _api!.userKey('bookmarks_$_bookId');
 
   bool _showMenu = false;
 
@@ -185,6 +187,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     try {
       if (kIsWeb) {
         final savedLocator = await _loadSavedLocator();
+        final serverPosition = await _loadServerPosition();
         final manifestUrl = await _api!.bookManifest(_bookId);
         final response = await http.get(Uri.parse(manifestUrl));
         if (response.statusCode != 200) {
@@ -243,11 +246,13 @@ class _ReaderScreenState extends State<ReaderScreen>
           _manifestUrl = manifestUrl;
           _pageLocators = pageLocators;
           _totalPages = pageLocators.isEmpty ? 1 : pageLocators.length;
-          final startPage =
-              savedPage ??
-              (savedLocator == null
-                  ? null
-                  : _pageForLocator(_relativeLocator(savedLocator)));
+          // Resume from the server when it has a newer position (another device).
+          final startPage = serverPosition != null
+              ? _pageForLocator(_relativeLocator(serverPosition))
+              : savedPage ??
+                    (savedLocator == null
+                        ? null
+                        : _pageForLocator(_relativeLocator(savedLocator)));
           _initialLocator = startPage == null || pageLocators.isEmpty
               ? null
               : _positionLocator(
@@ -305,6 +310,20 @@ class _ReaderScreenState extends State<ReaderScreen>
       );
     } catch (_) {
       _unsyncedActiveSeconds += seconds;
+    }
+  }
+
+  /// The server's position for this book if it is newer than this device's.
+  Future<Locator?> _loadServerPosition() async {
+    try {
+      final remote = await _api!.readingPosition(_bookId);
+      if (remote == null) return null;
+      final prefs = await SharedPreferences.getInstance();
+      final localAt = DateTime.tryParse(prefs.getString(_locatorTimeKey) ?? '');
+      if (localAt != null && !remote.lastReadAt.isAfter(localAt)) return null;
+      return Locator.fromJson(remote.locator);
+    } catch (_) {
+      return null;
     }
   }
 
@@ -552,11 +571,16 @@ class _ReaderScreenState extends State<ReaderScreen>
 
       await prefs.setStringList(_bookmarksKey, bookmarks);
 
-      final rawTitles = prefs.getString('bookmark_titles_$_bookId');
+      final rawTitles = prefs.getString(
+        _api!.userKey('bookmark_titles_$_bookId'),
+      );
       if (rawTitles != null) {
         final titles = Map<String, dynamic>.from(jsonDecode(rawTitles) as Map);
         titles.remove(locatorJson);
-        await prefs.setString('bookmark_titles_$_bookId', jsonEncode(titles));
+        await prefs.setString(
+          _api!.userKey('bookmark_titles_$_bookId'),
+          jsonEncode(titles),
+        );
       }
 
       if (!mounted) {
@@ -596,6 +620,10 @@ class _ReaderScreenState extends State<ReaderScreen>
       final prefs = await SharedPreferences.getInstance();
 
       await prefs.setString(_locatorKey, locator.json);
+      await prefs.setString(
+        _locatorTimeKey,
+        DateTime.now().toUtc().toIso8601String(),
+      );
       await prefs.setInt(_pageKey, page ?? _pageForLocator(locator));
 
       debugPrint('LOCATOR SAVED');

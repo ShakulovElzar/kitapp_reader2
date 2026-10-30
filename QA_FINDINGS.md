@@ -17,16 +17,16 @@ Branch: `codex/full-app-reader-fixes`. Tested: server/admin builds, `flutter ana
 - [x] Native iOS/Android: web-only for the MVP. Replace the hardcoded `assets/books/test.epub` with a clear "not supported" message.
 
 ### Product rules
-- [ ] Archived or deleted books stay readable for buyers and active renters (also update the QA test that asserts the opposite).
-- [ ] Library shows only books the user added or opened (new `LibraryEntry` table), not every free book.
-- [ ] Detail page uses real data: language from the EPUB, age from `isAdult`, dates from `publishedAt` / `updatedAt`, "Most read" from real `ReadingProgress` counts. Remove the fake view count.
-- [ ] Strict access per type: FREE = read; PURCHASE = buy (plus rent if `rentalPrice` is set); RENTAL = rent only; renters can upgrade to buy. Price 0 only for FREE.
+- [x] Archived or deleted books stay readable for buyers and active renters (also update the QA test that asserts the opposite).
+- [x] Library shows only books the user added or opened (new `LibraryEntry` table), not every free book.
+- [x] Detail page uses real data: language from the EPUB, age from `isAdult`, dates from `publishedAt` / `updatedAt`, "Most read" from real `ReadingProgress` counts. Remove the fake view count.
+- [x] Strict access per type: FREE = read; PURCHASE = buy (plus rent if `rentalPrice` is set); RENTAL = rent only; renters can upgrade to buy. Price 0 only for FREE.
 
 ### Admin and data
-- [ ] Enforce roles: EDITOR works on content only. SUPERADMIN only: revenue, readers, blocking, audit log.
-- [ ] Reports: revenue = purchases + rentals (shown separately); count only rentals that are still active; periods in Asia/Bishkek time.
-- [ ] Resume reading from the server-saved locator; key local progress, bookmarks and settings by user ID; clear them on logout.
-- [ ] Remove the unused MinIO/S3 config. Run the QA scripts against a separate `kitapp_test` DB. Clean the dev DB (test readers, the "adilet" book with a person's photo, the "Probe PURCHASE/RENTAL" books).
+- [x] Enforce roles: EDITOR works on content only. SUPERADMIN only: revenue, readers, blocking, audit log.
+- [x] Reports: revenue = purchases + rentals (shown separately); count only rentals that are still active; periods in Asia/Bishkek time.
+- [x] Resume reading from the server-saved locator; key local progress, bookmarks and settings by user ID; clear them on logout.
+- [x] Remove the unused MinIO/S3 config. Run the QA scripts against a separate `kitapp_test` DB. Test books ("adilet", "Probe PURCHASE/RENTAL") archived; the 93 test reader accounts are left in place (deleting them can't be undone). QA now runs with `npm run qa:api`.
 
 - [x] Reader redesign to match the reference screenshots: dark panel with Contents / Settings / Search tabs, round back and bookmark buttons, chapter list with page numbers, theme swatches, font picker, vertical sliders.
 
@@ -39,7 +39,7 @@ Branch: `codex/full-app-reader-fixes`. Tested: server/admin builds, `flutter ana
 - [x] Re-buying after a refund would hit the unique `reference` and return a 500.
 - [x] JWT secret falls back to `'local-kitapp-secret'`. Fail on startup if `JWT_SECRET` is missing outside dev.
 - [ ] `ReadingProgress` sync caps at 300 s per request, so seconds above that are lost after failed syncs.
-- [ ] Profile "Purchases: N books" counts every free book.
+- [x] Profile "Purchases: N books" counts every free book.
 - [x] `web/index.html`: page title and description are still "kitapp_reader2" / "A new Flutter project."
 
 ## Environment notes (not app bugs)

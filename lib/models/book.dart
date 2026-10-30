@@ -22,6 +22,10 @@ class Book {
     this.description = '',
     this.readerAccess,
     this.rentalEndsAt,
+    this.language,
+    this.readersCount = 0,
+    this.publishedAt,
+    this.updatedAt,
   });
 
   factory Book.fromJson(Map<String, dynamic> json) {
@@ -56,6 +60,10 @@ class Book {
       rentalEndsAt: json['rentalEndsAt'] == null
           ? null
           : DateTime.tryParse(json['rentalEndsAt'].toString()),
+      language: json['language']?.toString(),
+      readersCount: (json['readersCount'] as num?)?.toInt() ?? 0,
+      publishedAt: DateTime.tryParse(json['publishedAt']?.toString() ?? ''),
+      updatedAt: DateTime.tryParse(json['updatedAt']?.toString() ?? ''),
       coverStart: _palette[seed % _palette.length].$1,
       coverEnd: _palette[seed % _palette.length].$2,
       coverMark: title.split(RegExp(r'\s+')).first.toUpperCase(),
@@ -83,9 +91,36 @@ class Book {
   final String? readerAccess;
   final DateTime? rentalEndsAt;
 
-  bool get isFree => access == BookAccess.free || price == 0;
-  bool get canRent => rentalPrice != null && rentalDays != null;
+  /// ISO language code from the EPUB (e.g. `ky`, `ru`), if known.
+  final String? language;
+
+  /// Readers who spent at least two minutes in the book.
+  final int readersCount;
+  final DateTime? publishedAt;
+  final DateTime? updatedAt;
+
+  String? get languageName =>
+      switch (language?.split('-').first.toLowerCase()) {
+        null || '' => null,
+        'ky' => 'Кыргызча',
+        'ru' => 'Орусча',
+        'en' => 'Англисче',
+        'kk' => 'Казакча',
+        'uz' => 'Өзбекче',
+        'tr' => 'Түркчө',
+        'de' => 'Немисче',
+        'fr' => 'Французча',
+        final code => code.toUpperCase(),
+      };
+
+  // FREE = read for free; PURCHASE = buy (and rent if a rental price is set);
+  // RENTAL = rent only. Mirrors the server rules.
+  bool get isFree => access == BookAccess.free;
   bool get canBuy => access == BookAccess.purchase;
+  bool get canRent =>
+      access != BookAccess.free &&
+      (rentalPrice ?? 0) > 0 &&
+      (rentalDays ?? 0) > 0;
 }
 
 const _palette = <(int, int)>[

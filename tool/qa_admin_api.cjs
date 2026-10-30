@@ -44,7 +44,23 @@ async function rejected(path, expectedStatus, init = {}) {
   });
   assert.ok(report.totalQuantity >= 5);
   assert.ok(report.items.every((item) => item.title && item.author));
+  assert.equal(report.timeZone, 'Asia/Bishkek');
+  assert.equal(report.totalRevenue, report.salesRevenue + report.rentalRevenue);
   console.log('PASS book and author sales report');
+
+  if (process.env.KITAPP_QA_EDITOR_EMAIL) {
+    const editor = await request('/auth/admin/login', {
+      method: 'POST',
+      body: JSON.stringify({ email: process.env.KITAPP_QA_EDITOR_EMAIL, password: process.env.KITAPP_QA_EDITOR_PASSWORD }),
+    });
+    const editorDashboard = await request('/admin/dashboard', { token: editor.token });
+    assert.equal(editorDashboard.revenue, undefined, 'editors must not see revenue');
+    await request('/admin/books', { token: editor.token });
+    for (const path of ['/admin/readers', '/admin/purchases', '/admin/reports/sales', '/admin/audit-logs']) {
+      await rejected(path, 403, { token: editor.token });
+    }
+    console.log('PASS editors manage content only');
+  }
 
   const otp = await request('/auth/phone/request-otp', {
     method: 'POST',
@@ -140,6 +156,8 @@ async function rejected(path, expectedStatus, init = {}) {
     const catalogWithBook = await request('/catalog/books');
     assert.ok(catalogWithBook.some((item) => item.id === book.id));
     const file = await request(`/reader/books/${book.id}/file`, { token: reader.token });
+    const libraryAfterOpen = await request('/reader/library', { token: reader.token });
+    assert.ok(libraryAfterOpen.some((item) => item.id === book.id), 'opened free book joins the library');
     const manifest = await fetch(file.manifestUrl).then((response) => {
       assert.ok(response.ok, `GET manifest: ${response.status}`);
       return response.json();
@@ -240,7 +258,44 @@ async function rejected(path, expectedStatus, init = {}) {
     const libraryAfterArchive = await request('/reader/library', { token: reader.token });
     assert.ok(!libraryAfterArchive.some((item) => item.id === book.id));
     book = undefined;
-    console.log('PASS archived book disappears from the reader library');
+    console.log('PASS free book joins the library when opened and leaves when archived');
+
+    const paidBook = async (accessType, price, rentalPrice) => {
+      const data = new FormData();
+      data.set('data', JSON.stringify({
+        title: `QA ${accessType} ${suffix}`,
+        slug: `qa-${accessType.toLowerCase()}-${suffix}`,
+        description: 'QA access rules',
+        authorId: author.id,
+        categoryId: category.id,
+        price,
+        rentalPrice,
+        rentalDays: 7,
+        pages: 10,
+        accessType,
+        status: 'PUBLISHED',
+      }));
+      data.set('cover', new Blob([await fs.readFile(coverPath)], { type: 'image/png' }), 'cover.png');
+      data.set('epub', new Blob([await fs.readFile(epubPath)], { type: 'application/epub+zip' }), 'book.epub');
+      return data;
+    };
+    await rejected('/admin/books-with-files', 400, { token: login.token, method: 'POST', body: await paidBook('PURCHASE', 0, null) });
+    const owned = await request('/admin/books-with-files', { token: login.token, method: 'POST', body: await paidBook('PURCHASE', 150, 30) });
+    const rentalOnly = await request('/admin/books-with-files', { token: login.token, method: 'POST', body: await paidBook('RENTAL', 200, 40) });
+    try {
+      await rejected('/reader/purchases', 400, { token: reader.token, method: 'POST', body: JSON.stringify({ bookId: rentalOnly.id }) });
+      await request('/reader/rentals', { token: reader.token, method: 'POST', body: JSON.stringify({ bookId: rentalOnly.id }) });
+      await request('/reader/purchases', { token: reader.token, method: 'POST', body: JSON.stringify({ bookId: owned.id }) });
+      await request(`/admin/books/${owned.id}`, { token: login.token, method: 'DELETE' });
+      const libraryAfterPaidArchive = await request('/reader/library', { token: reader.token });
+      assert.ok(libraryAfterPaidArchive.some((item) => item.id === owned.id), 'bought book survives archiving');
+      assert.ok(libraryAfterPaidArchive.some((item) => item.id === rentalOnly.id && item.readerAccess === 'RENTAL'));
+      await request(`/reader/books/${owned.id}/file`, { token: reader.token });
+      console.log('PASS strict access rules; bought books survive archiving');
+    } finally {
+      await request(`/admin/books/${rentalOnly.id}`, { token: login.token, method: 'DELETE' }).catch(() => {});
+      await request(`/admin/books/${owned.id}`, { token: login.token, method: 'DELETE' }).catch(() => {});
+    }
   } finally {
     if (book) await request(`/admin/books/${book.id}`, { token: login.token, method: 'DELETE' });
     if (author) await request(`/admin/authors/${author.id}`, { token: login.token, method: 'DELETE' });

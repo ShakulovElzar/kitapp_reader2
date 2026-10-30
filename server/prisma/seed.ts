@@ -44,6 +44,16 @@ async function seed() {
     update: { passwordHash },
   });
 
+  // Optional content-only account for local testing of the EDITOR role.
+  if (process.env.EDITOR_EMAIL && process.env.EDITOR_PASSWORD) {
+    const editorHash = await bcrypt.hash(process.env.EDITOR_PASSWORD, 12);
+    await prisma.admin.upsert({
+      where: { email: process.env.EDITOR_EMAIL },
+      create: { email: process.env.EDITOR_EMAIL, passwordHash: editorHash, name: 'Редактор', role: AdminRole.EDITOR },
+      update: { passwordHash: editorHash, role: AdminRole.EDITOR },
+    });
+  }
+
   const authorIds = new Map<string, string>();
   const categoryIds = new Map<string, string>();
   for (const [, , authorName, categoryName] of books) {

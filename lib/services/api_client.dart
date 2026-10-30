@@ -30,6 +30,38 @@ class ApiClient {
   String? get token => _prefs.getString('reader_token');
   String? get phone => _prefs.getString('reader_phone');
 
+  /// The signed-in reader's id (stored at login; read from the token for older sessions).
+  String? get readerId {
+    final stored = _prefs.getString('reader_id');
+    if (stored != null) return stored;
+    final parts = token?.split('.');
+    if (parts == null || parts.length != 3) return null;
+    try {
+      final payload = utf8.decode(
+        base64Url.decode(base64Url.normalize(parts[1])),
+      );
+      return (jsonDecode(payload) as Map<String, dynamic>)['sub'] as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Local storage key scoped to the signed-in reader, so accounts on one device don't mix.
+  String userKey(String key) => 'u_${readerId ?? 'anon'}_$key';
+
+  /// Server-saved reading position for a book, or null if never read.
+  Future<ServerPosition?> readingPosition(String bookId) async {
+    final value =
+        await _request('/reader/progress/$bookId', authenticated: true)
+            as Map<String, dynamic>?;
+    final locator = value?['locator'];
+    final lastReadAt = DateTime.tryParse(
+      value?['lastReadAt']?.toString() ?? '',
+    );
+    if (locator is! Map<String, dynamic> || lastReadAt == null) return null;
+    return ServerPosition(locator: locator, lastReadAt: lastReadAt);
+  }
+
   /// Returns the code only when the server runs in local development mode.
   Future<String?> requestOtp(String phone) async {
     final value = await _request(
@@ -51,13 +83,28 @@ class ApiClient {
     await Future.wait([
       _prefs.setString('reader_token', value['token'] as String),
       _prefs.setString('reader_phone', phone),
+      _prefs.setString(
+        'reader_id',
+        (value['reader'] as Map<String, dynamic>)['id'] as String,
+      ),
     ]);
   }
 
   Future<void> logout() async {
+    // Reading positions are kept on the server; drop this reader's local copies.
+    // Bookmarks and search history stay, scoped to the reader's id.
+    final prefix = userKey('');
+    final cached = _prefs.getKeys().where(
+      (key) =>
+          key.startsWith('${prefix}progress_') ||
+          key.startsWith('${prefix}locator_') ||
+          key.startsWith('${prefix}reader_page_'),
+    );
     await Future.wait([
+      for (final key in cached.toList()) _prefs.remove(key),
       _prefs.remove('reader_token'),
       _prefs.remove('reader_phone'),
+      _prefs.remove('reader_id'),
     ]);
   }
 
@@ -189,4 +236,11 @@ class RecentBook {
   final Book book;
   final double progression;
   final Map<String, dynamic>? locator;
+}
+
+class ServerPosition {
+  const ServerPosition({required this.locator, required this.lastReadAt});
+
+  final Map<String, dynamic> locator;
+  final DateTime lastReadAt;
 }

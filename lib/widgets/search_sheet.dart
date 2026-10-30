@@ -7,6 +7,7 @@ import 'package:html/parser.dart' as html_parser;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../state/app_state.dart';
 import '../theme/reader_palette.dart';
 import 'contents_sheet.dart';
 
@@ -39,7 +40,8 @@ class _SearchSheetState extends State<SearchSheet> {
   bool _isSearching = false;
   int _searchGeneration = 0;
 
-  String get _recentKey => 'reader_searches_${widget.bookId}';
+  String get _recentKey =>
+      AppStateScope.read(context).api.userKey('reader_searches_${widget.bookId}');
 
   @override
   void initState() {

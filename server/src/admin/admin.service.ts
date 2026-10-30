@@ -21,23 +21,35 @@ export class AdminService {
     private readonly storage: StorageService,
   ) {}
 
-  async dashboard() {
-    const [books, readers, completedSales, revenue, rentals] = await Promise.all([
-      this.prisma.book.count({ where: { deletedAt: null } }),
+  me(id: string) {
+    return this.prisma.admin.findUniqueOrThrow({
+      where: { id },
+      select: { id: true, name: true, email: true, role: true },
+    });
+  }
+
+  /** Editors only see catalog numbers; money and readers are for superadmins. */
+  async dashboard(full: boolean) {
+    const books = await this.prisma.book.count({ where: { deletedAt: null } });
+    if (!full) return { books };
+    const completed = { status: PaymentStatus.COMPLETED };
+    const [readers, sales, salesRevenue, activeRentals, rentalRevenue] = await Promise.all([
       this.prisma.reader.count({ where: { deletedAt: null } }),
-      this.prisma.purchase.count({ where: { status: PaymentStatus.COMPLETED } }),
-      this.prisma.purchase.aggregate({
-        where: { status: PaymentStatus.COMPLETED },
-        _sum: { amount: true },
-      }),
-      this.prisma.rental.count({ where: { status: PaymentStatus.COMPLETED } }),
+      this.prisma.purchase.count({ where: completed }),
+      this.prisma.purchase.aggregate({ where: completed, _sum: { amount: true } }),
+      this.prisma.rental.count({ where: { ...completed, endsAt: { gt: new Date() } } }),
+      this.prisma.rental.aggregate({ where: completed, _sum: { amount: true } }),
     ]);
+    const sale = Number(salesRevenue._sum.amount ?? 0);
+    const rental = Number(rentalRevenue._sum.amount ?? 0);
     return {
       books,
       readers,
-      sales: completedSales,
-      rentals,
-      revenue: Number(revenue._sum.amount ?? 0),
+      sales,
+      activeRentals,
+      salesRevenue: sale,
+      rentalRevenue: rental,
+      revenue: sale + rental,
       currency: 'KGS',
     };
   }
@@ -264,33 +276,47 @@ export class AdminService {
     });
   }
 
+  /** Sales and rentals per book for a period of Bishkek calendar days. */
   async salesReport(from?: string, to?: string) {
     const period = this.period(from, to);
-    const groups = await this.prisma.purchase.groupBy({
-      by: ['bookId'],
-      where: { status: PaymentStatus.COMPLETED, createdAt: period },
-      _count: { _all: true },
-      _sum: { amount: true },
-      orderBy: { _sum: { amount: 'desc' } },
-    });
-    const books = await this.prisma.book.findMany({
-      where: { id: { in: groups.map((item) => item.bookId) } },
-      include: { author: true },
-    });
+    const where = { status: PaymentStatus.COMPLETED, createdAt: { gte: period.gte, lte: period.lte } };
+    const [salesGroups, rentalGroups] = await Promise.all([
+      this.prisma.purchase.groupBy({ by: ['bookId'], where, _count: { _all: true }, _sum: { amount: true } }),
+      this.prisma.rental.groupBy({ by: ['bookId'], where, _count: { _all: true }, _sum: { amount: true } }),
+    ]);
+    const ids = [...new Set([...salesGroups, ...rentalGroups].map((group) => group.bookId))];
+    const books = await this.prisma.book.findMany({ where: { id: { in: ids } }, include: { author: true } });
     const byId = new Map(books.map((book) => [book.id, book]));
-    const items = groups.map((group) => ({
-      bookId: group.bookId,
-      title: byId.get(group.bookId)?.title ?? 'Белгисиз китеп',
-      author: byId.get(group.bookId)?.author.name ?? 'Белгисиз автор',
-      quantity: group._count._all,
-      revenue: Number(group._sum.amount ?? 0),
-      currency: 'KGS',
-    }));
+    const salesById = new Map(salesGroups.map((group) => [group.bookId, group]));
+    const rentalsById = new Map(rentalGroups.map((group) => [group.bookId, group]));
+    const items = ids.map((bookId) => {
+      const sale = salesById.get(bookId);
+      const rental = rentalsById.get(bookId);
+      const salesRevenue = Number(sale?._sum.amount ?? 0);
+      const rentalRevenue = Number(rental?._sum.amount ?? 0);
+      return {
+        bookId,
+        title: byId.get(bookId)?.title ?? 'Белгисиз китеп',
+        author: byId.get(bookId)?.author.name ?? 'Белгисиз автор',
+        quantity: sale?._count._all ?? 0,
+        rentals: rental?._count._all ?? 0,
+        salesRevenue,
+        rentalRevenue,
+        revenue: salesRevenue + rentalRevenue,
+        currency: 'KGS',
+      };
+    }).sort((a, b) => b.revenue - a.revenue);
+    const sum = (key: 'quantity' | 'rentals' | 'salesRevenue' | 'rentalRevenue' | 'revenue') =>
+      items.reduce((total, item) => total + item[key], 0);
     return {
-      from: period.gte.toISOString(),
-      to: period.lte.toISOString(),
-      totalQuantity: items.reduce((sum, item) => sum + item.quantity, 0),
-      totalRevenue: items.reduce((sum, item) => sum + item.revenue, 0),
+      from: period.from,
+      to: period.to,
+      timeZone: 'Asia/Bishkek',
+      totalQuantity: sum('quantity'),
+      totalRentals: sum('rentals'),
+      salesRevenue: sum('salesRevenue'),
+      rentalRevenue: sum('rentalRevenue'),
+      totalRevenue: sum('revenue'),
       items,
     };
   }
@@ -303,14 +329,19 @@ export class AdminService {
     });
   }
 
+  /** Calendar days in Bishkek (UTC+6, no daylight saving). Defaults to this month so far. */
   private period(from?: string, to?: string) {
-    const now = new Date();
-    const gte = from ? new Date(`${from}T00:00:00.000Z`) : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-    const lte = to ? new Date(`${to}T23:59:59.999Z`) : now;
-    if (Number.isNaN(gte.getTime()) || Number.isNaN(lte.getTime()) || gte > lte) {
+    const offset = '+06:00';
+    const today = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const fromDay = from ?? `${today.slice(0, 7)}-01`;
+    const toDay = to ?? today;
+    const valid = (day: string) => /^\d{4}-\d{2}-\d{2}$/.test(day);
+    const gte = new Date(`${fromDay}T00:00:00.000${offset}`);
+    const lte = new Date(`${toDay}T23:59:59.999${offset}`);
+    if (!valid(fromDay) || !valid(toDay) || Number.isNaN(gte.getTime()) || Number.isNaN(lte.getTime()) || gte > lte) {
       throw new BadRequestException('Отчёт мезгили туура эмес');
     }
-    return { gte, lte };
+    return { gte, lte, from: fromDay, to: toDay };
   }
 
   private async requireAuthor(id: string) {
@@ -331,16 +362,24 @@ export class AdminService {
     return value;
   }
 
+  /** FREE = read for free; PURCHASE = buy (optionally rent); RENTAL = rent only. */
   private validateAccess(dto: {
     accessType?: AccessType;
     price?: unknown;
     rentalPrice?: unknown;
     rentalDays?: number;
   }) {
-    if (dto.accessType === AccessType.FREE && Number(dto.price ?? 0) !== 0) {
-      throw new BadRequestException('Акысыз китептин баасы 0 болушу керек');
+    const price = Number(dto.price ?? 0);
+    const rentalPrice = dto.rentalPrice == null ? null : Number(dto.rentalPrice);
+    if (dto.accessType === AccessType.FREE) {
+      if (price !== 0) throw new BadRequestException('Акысыз китептин баасы 0 болушу керек');
+      if (rentalPrice) throw new BadRequestException('Акысыз китепти ижарага берүүгө болбойт');
+      return;
     }
-    if (dto.accessType === AccessType.RENTAL && (!dto.rentalPrice || !dto.rentalDays)) {
+    if (dto.accessType === AccessType.PURCHASE && !(price > 0)) {
+      throw new BadRequestException('Сатылуучу китептин баасы 0дон чоң болушу керек');
+    }
+    if (dto.accessType === AccessType.RENTAL && (!rentalPrice || rentalPrice <= 0 || !dto.rentalDays)) {
       throw new BadRequestException('Ижара баасын жана мөөнөтүн көрсөтүңүз');
     }
   }

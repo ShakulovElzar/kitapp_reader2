@@ -181,6 +181,23 @@ export class StorageService {
     return this.url(key);
   }
 
+  private readonly languages = new Map<string, string | null>();
+
+  /** The book's language code from its manifest (cached; files never change in place). */
+  async publicationLanguage(epubKey: string) {
+    if (this.languages.has(epubKey)) return this.languages.get(epubKey)!;
+    let language: string | null = null;
+    try {
+      const manifest = JSON.parse(await readFile(join(this.root, epubKey.slice(0, -5), 'manifest.json'), 'utf8'));
+      const value = Array.isArray(manifest.metadata?.language) ? manifest.metadata.language[0] : manifest.metadata?.language;
+      language = typeof value === 'string' && value !== 'und' ? value : null;
+    } catch {
+      language = null;
+    }
+    this.languages.set(epubKey, language);
+    return language;
+  }
+
   /** Returns the file a signed book link points to, or null if the link is invalid or expired. */
   resolveSignedPath(token: string, bookId: string, relativePath: string) {
     const [expiresText, signature] = token.split('.', 2);

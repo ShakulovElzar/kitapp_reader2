@@ -49,6 +49,12 @@ export class PublicController {
     return this.service.saveProgress(req.auth.sub, dto);
   }
 
+  @Get('reader/progress/:bookId')
+  @UseGuards(ReaderGuard)
+  readingPosition(@Param('bookId') bookId: string, @Req() req: ReaderRequest) {
+    return this.service.readingPosition(req.auth.sub, bookId);
+  }
+
   @Get('reader/recent')
   @UseGuards(ReaderGuard)
   recent(@Req() req: ReaderRequest) {

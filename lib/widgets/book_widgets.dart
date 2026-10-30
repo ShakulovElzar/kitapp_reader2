@@ -165,7 +165,11 @@ class BookTileCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      book.isFree ? 'Акысыз' : '${book.price} сом',
+                      book.isFree
+                          ? 'Акысыз'
+                          : book.canBuy
+                          ? '${book.price} сом'
+                          : 'Ижара: ${book.rentalPrice} сом',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(

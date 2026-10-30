@@ -13,6 +13,9 @@ class BookDetailScreen extends StatelessWidget {
 
   final Book book;
 
+  String get _rentLabel =>
+      '${book.rentalDays} күнгө ${book.rentalPrice} сомго ижарага алуу';
+
   Future<void> _confirmBuy(
     BuildContext context,
     AppStateController state,
@@ -180,36 +183,41 @@ class BookDetailScreen extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            const Icon(
-                              Icons.star_rounded,
-                              color: Color(0xFFF0A51A),
-                              size: 18,
-                            ),
-                            const SizedBox(width: 3),
-                            Text(
-                              '${book.rating}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            const Icon(
-                              Icons.visibility_outlined,
-                              size: 16,
-                              color: AppColors.muted,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${1200 + book.pages}',
-                              style: const TextStyle(
-                                color: AppColors.muted,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
-                        ),
+                        if (book.rating > 0 || book.readersCount > 0)
+                          Row(
+                            children: [
+                              if (book.rating > 0) ...[
+                                const Icon(
+                                  Icons.star_rounded,
+                                  color: Color(0xFFF0A51A),
+                                  size: 18,
+                                ),
+                                const SizedBox(width: 3),
+                                Text(
+                                  book.rating.toStringAsFixed(1),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                              ],
+                              if (book.readersCount > 0) ...[
+                                const Icon(
+                                  Icons.people_outline_rounded,
+                                  size: 16,
+                                  color: AppColors.muted,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${book.readersCount} окурман',
+                                  style: const TextStyle(
+                                    color: AppColors.muted,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
                         const SizedBox(height: 12),
                         Wrap(
                           spacing: 6,
@@ -239,8 +247,13 @@ class BookDetailScreen extends StatelessWidget {
                       icon: Icons.description_outlined,
                       label: '${book.pages} бет',
                     ),
-                    _Fact(icon: Icons.language_rounded, label: 'Кыргызча'),
-                    const _Fact(icon: Icons.person_outline, label: '16+'),
+                    if (book.languageName != null)
+                      _Fact(
+                        icon: Icons.language_rounded,
+                        label: book.languageName!,
+                      ),
+                    if (book.isAdult)
+                      const _Fact(icon: Icons.person_outline, label: '18+'),
                   ],
                 ),
               ),
@@ -275,14 +288,24 @@ class BookDetailScreen extends StatelessWidget {
                   fontSize: 13,
                 ),
               ),
-              const SizedBox(height: 22),
-              const Text(
-                'Иш-чара маалыматы',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
-              ),
-              const SizedBox(height: 8),
-              const _InfoRow(label: 'Басылып чыккан', value: '12-май, 2024'),
-              const _InfoRow(label: 'Акыркы өзгөртүү', value: '19-май, 2024'),
+              if (book.publishedAt != null || book.updatedAt != null) ...[
+                const SizedBox(height: 22),
+                const Text(
+                  'Китеп жөнүндө',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 8),
+                if (book.publishedAt != null)
+                  _InfoRow(
+                    label: 'Kitapp\'та жарыяланган',
+                    value: _formatDate(book.publishedAt!),
+                  ),
+                if (book.updatedAt != null)
+                  _InfoRow(
+                    label: 'Акыркы өзгөртүү',
+                    value: _formatDate(book.updatedAt!),
+                  ),
+              ],
               const SizedBox(height: 24),
               if (hasAccess)
                 FilledButton.icon(
@@ -296,33 +319,60 @@ class BookDetailScreen extends StatelessWidget {
                         ? 'Окууну улантуу'
                         : 'Окууну баштоо',
                   ),
-                )
-              else ...[
+                ),
+              if (book.isFree && !state.inLibrary(book)) ...[
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                  onPressed: () => _confirmBuy(context, state),
+                  icon: const Icon(Icons.library_add_outlined),
+                  label: const Text('Китепканага кошуу'),
+                ),
+              ],
+              if (!hasAccess && book.canBuy)
                 FilledButton.icon(
                   style: FilledButton.styleFrom(
                     minimumSize: const Size.fromHeight(50),
                   ),
                   onPressed: () => _confirmBuy(context, state),
                   icon: const Icon(Icons.shopping_bag_outlined),
-                  label: Text(
-                    book.isFree
-                        ? 'Китепканага кошуу'
-                        : '${book.price} сомго сатып алуу',
-                  ),
+                  label: Text('${book.price} сомго сатып алуу'),
                 ),
-                if (book.canRent) ...[
-                  const SizedBox(height: 10),
-                  OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(48),
-                    ),
-                    onPressed: () => _confirmRent(context, state),
-                    icon: const Icon(Icons.schedule_rounded),
-                    label: Text(
-                      '${book.rentalDays} күнгө ${book.rentalPrice} сомго ижарага алуу',
-                    ),
+              // Renters can upgrade to owning the book.
+              if (state.isRented(book) &&
+                  book.canBuy &&
+                  !state.isPurchased(book)) ...[
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
                   ),
-                ],
+                  onPressed: () => _confirmBuy(context, state),
+                  icon: const Icon(Icons.shopping_bag_outlined),
+                  label: Text('Биротоло сатып алуу: ${book.price} сом'),
+                ),
+              ],
+              if (!hasAccess && book.canRent) ...[
+                if (book.canBuy) const SizedBox(height: 10),
+                book.canBuy
+                    ? OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(48),
+                        ),
+                        onPressed: () => _confirmRent(context, state),
+                        icon: const Icon(Icons.schedule_rounded),
+                        label: Text(_rentLabel),
+                      )
+                    : FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(50),
+                        ),
+                        onPressed: () => _confirmRent(context, state),
+                        icon: const Icon(Icons.schedule_rounded),
+                        label: Text(_rentLabel),
+                      ),
               ],
             ],
           ),
@@ -404,4 +454,24 @@ class _InfoRow extends StatelessWidget {
       ),
     );
   }
+}
+
+const _months = [
+  'январь',
+  'февраль',
+  'март',
+  'апрель',
+  'май',
+  'июнь',
+  'июль',
+  'август',
+  'сентябрь',
+  'октябрь',
+  'ноябрь',
+  'декабрь',
+];
+
+String _formatDate(DateTime value) {
+  final local = value.toLocal();
+  return '${local.day}-${_months[local.month - 1]}, ${local.year}';
 }
