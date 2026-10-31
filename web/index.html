@@ -57,8 +57,14 @@
       let readerPreferences = null;
       let readerSearch = null;
 
+      // Readium keeps a spare hidden iframe; the reader works with the visible one.
+      const visibleFrame = () => {
+        const frames = [...document.querySelectorAll('#container iframe')];
+        return frames.find((frame) => frame.style.visibility !== 'hidden') ?? frames[0];
+      };
+
       const readerDocument = () => {
-        const frame = document.querySelector('#container iframe');
+        const frame = visibleFrame();
         try {
           return frame?.contentDocument ?? null;
         } catch (_) {
@@ -77,6 +83,14 @@
           style.id = 'kitapp-reader-preferences';
           content.head.appendChild(style);
         }
+        // Book fonts offered in reader settings (Literata, PT Serif, Golos Text).
+        if (!content.getElementById('kitapp-reader-fonts')) {
+          const fonts = content.createElement('link');
+          fonts.id = 'kitapp-reader-fonts';
+          fonts.rel = 'stylesheet';
+          fonts.href = 'https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;600&family=Literata:ital,wght@0,400;0,600;1,400&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap';
+          content.head.appendChild(fonts);
+        }
         style.textContent = `
           .kitapp-pagebreak { display: inline !important; width: 0 !important; height: 0 !important; }
           mark[data-kitapp-search] { background: #ffe066 !important; color: #111 !important; border-radius: 2px; }
@@ -85,13 +99,17 @@
         return true;
       };
 
+      const fontStack = (name) => name === 'Golos Text'
+        ? "'Golos Text', system-ui, sans-serif"
+        : `'${name}', Georgia, serif`;
+
       const applyNavigatorPreferences = () => {
         const reader = window.kitappReader;
         if (!reader?._nav || !readerPreferences) return false;
         const values = readerPreferences;
         reader.setEPUBPreferences(JSON.stringify({
           fontSize: values.fontSize / 100,
-          fontFamily: values.fontFamily,
+          fontFamily: fontStack(values.fontFamily),
           lineHeight: values.lineHeight,
           pageMargins: values.margins,
           backgroundColor: values.background,
@@ -212,16 +230,44 @@
         clearSearch();
       };
 
+      // Jumps (chapters, the scrubber, search) sometimes leave the book scrolled
+      // part of a page, so text slides left and up. Snap back to a whole page.
+      const snapToPage = (win) => {
+        const root = win?.document?.scrollingElement;
+        const width = root?.clientWidth;
+        if (!width) return;
+        if (root.scrollTop) root.scrollTop = 0;
+        const rest = root.scrollLeft % width;
+        if (rest > 1 && width - rest > 1) {
+          root.scrollLeft = Math.round(root.scrollLeft / width) * width;
+        }
+      };
+
+      const watchPageAlignment = (frame) => {
+        const win = frame.contentWindow;
+        if (!win || win.kitappSnapWatched) return;
+        win.kitappSnapWatched = true;
+        let timer = null;
+        win.addEventListener('scroll', () => {
+          window.clearTimeout(timer);
+          timer = window.setTimeout(() => snapToPage(win), 120);
+        }, { passive: true });
+        window.setTimeout(() => snapToPage(win), 300);
+      };
+
       const observeReaderFrame = () => {
-        const frame = document.querySelector('#container iframe');
-        if (!frame || frame.dataset.kitappObserved) return;
-        frame.dataset.kitappObserved = 'true';
-        frame.addEventListener('load', () => {
-          window.setTimeout(() => {
-            applyPreferences();
-            if (readerSearch) highlightSearch();
+        for (const frame of document.querySelectorAll('#container iframe')) {
+          watchPageAlignment(frame);
+          if (frame.dataset.kitappObserved) continue;
+          frame.dataset.kitappObserved = 'true';
+          frame.addEventListener('load', () => {
+            watchPageAlignment(frame);
+            window.setTimeout(() => {
+              applyPreferences();
+              if (readerSearch) highlightSearch();
+            });
           });
-        });
+        }
         applyPreferences();
       };
       new MutationObserver(observeReaderFrame).observe(document.documentElement, {

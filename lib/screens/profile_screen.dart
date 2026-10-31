@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
+import '../widgets/book_widgets.dart';
+import 'phone_auth_screen.dart';
+import 'routes.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -14,197 +17,203 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
+  String _formatPhone(String phone) {
+    // Older sessions stored the number as typed ("0700112299").
+    final digits = phone.replaceAll(RegExp(r'\D'), '');
+    final local = digits.startsWith('996')
+        ? digits.substring(3)
+        : digits.startsWith('0')
+        ? digits.substring(1)
+        : digits;
+    final match = RegExp(r'^(\d{3})(\d{3})(\d{3})$').firstMatch(local);
+    if (match == null) return phone;
+    return '+996 ${match[1]} ${match[2]} ${match[3]}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = AppStateScope.of(context);
+    final books = state.libraryBooks;
+    final finished = books.where(state.isFinished).length;
+    final rented = books.where(state.isRented).length;
 
     return SafeArea(
       bottom: false,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(18, 20, 18, 28),
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
         children: [
-          const Text(
-            'Профиль',
-            style: TextStyle(fontSize: 27, fontWeight: FontWeight.w900),
-          ),
+          const Text('Профиль', style: AppText.pageTitle),
           const SizedBox(height: 6),
-          Text(
-            state.phone,
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 24),
-          _ProfileGroup(
-            children: [
-              _ProfileRow(
-                icon: Icons.menu_book_rounded,
-                title: 'Сатып алуулар',
-                subtitle: '${state.purchasedCount} китеп сатылып алынган',
-                onTap: () => _openInfo(
-                  context,
-                  'Сатып алуулар',
-                  'Сатып алынган жана ижарага алынган китептер «Башкы китептер» бөлүмүндө сакталат.',
+          if (state.isAuthenticated) ...[
+            Text(
+              _formatPhone(state.phone),
+              style: const TextStyle(fontSize: 16, color: AppColors.muted),
+            ),
+            const SizedBox(height: 22),
+            Container(
+              decoration: const BoxDecoration(
+                border: Border.symmetric(
+                  horizontal: BorderSide(color: AppColors.line),
                 ),
               ),
-              _ProfileRow(
-                icon: Icons.schedule_rounded,
-                title: 'Активдүү ижаралар',
-                subtitle:
-                    '${state.libraryBooks.where(state.isRented).length} активдүү ижара',
-                onTap: () => _openInfo(
-                  context,
-                  'Активдүү ижаралар',
-                  'Ижарага алынган китептер жети күн бою жеткиликтүү. Мөөнөт китепканада көрсөтүлөт.',
+              child: IntrinsicHeight(
+                child: Row(
+                  children: [
+                    _Count(value: finished, label: 'окулуп бүттү'),
+                    const VerticalDivider(width: 1),
+                    _Count(value: state.purchasedCount, label: 'сатып алынган'),
+                    const VerticalDivider(width: 1),
+                    _Count(value: rented, label: 'ижарада'),
+                  ],
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          _ProfileGroup(
-            children: [
-              _ProfileRow(
-                icon: Icons.support_agent_rounded,
-                title: 'Биз менен байланышуу',
-                subtitle: 'Суроолор жана колдоо',
-                onTap: () => _openInfo(
-                  context,
-                  'Биз менен байланышуу',
-                  'Колдоо кызматы: support@kitapp.kg\nИш убактысы: 09:00–18:00',
-                ),
-              ),
-              _ProfileRow(
-                icon: Icons.info_outline_rounded,
-                title: 'Колдонмо жөнүндө',
-                subtitle: 'Версия, шарттар жана купуялык',
-                onTap: () => _openInfo(
-                  context,
-                  'Колдонмо жөнүндө',
-                  'Kitapp — кыргыз тилиндеги электрондук китептерди окуу үчүн колдонмо.\n\nВерсия 1.0.0',
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
+            ),
+          ] else ...[
+            const SizedBox(height: 8),
+            const Text(
+              'Сатып алган китептериңиз жана окуган жериңиз сакталышы үчүн кириңиз.',
+              style: AppText.body,
+            ),
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: () => ensureSignedIn(context),
+              child: const Text('Кирүү'),
+            ),
+          ],
+          if (state.isAuthenticated) ...[
+            const _GroupLabel('Китептер'),
+            LinkRow(
+              title: 'Текчем',
+              value: '${books.length}',
+              onTap: () => openShelf(context),
+              divider: false,
+            ),
+          ],
+          const _GroupLabel('Окуу'),
           Material(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(16),
-            clipBehavior: Clip.antiAlias,
+            color: Colors.transparent,
             child: SwitchListTile(
-              secondary: Container(
-                width: 38,
-                height: 38,
-                alignment: Alignment.center,
-                decoration: const BoxDecoration(
-                  color: AppColors.greenSoft,
-                  shape: BoxShape.circle,
-                ),
-                child: const Text(
-                  '18+',
-                  style: TextStyle(
-                    color: AppColors.green,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
+              contentPadding: EdgeInsets.zero,
               title: const Text(
-                '18+ мазмунду көрсөтүү',
-                style: TextStyle(fontWeight: FontWeight.w800),
+                '18+ китептерди көрсөтүү',
+                style: TextStyle(fontSize: 16),
               ),
               subtitle: const Text(
-                'Чоңдор үчүн мазмунду көрсөтүү',
-                style: TextStyle(fontSize: 11),
+                'Каталогдо жана издөөдө',
+                style: AppText.meta,
               ),
               value: state.showAdult,
               onChanged: state.setShowAdult,
             ),
           ),
-          const SizedBox(height: 18),
-          TextButton.icon(
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.danger,
-              backgroundColor: const Color(0xFFFFF2F2),
-              minimumSize: const Size.fromHeight(50),
+          const _GroupLabel('Жардам'),
+          LinkRow(
+            title: 'Биз менен байланышуу',
+            onTap: () => _openInfo(
+              context,
+              'Биз менен байланышуу',
+              'Колдоо кызматы: support@kitapp.kg\nИш убактысы: 09:00–18:00',
             ),
-            onPressed: () => showDialog<void>(
-              context: context,
-              builder: (context) => AlertDialog(
-                title: const Text('Чыгуу'),
-                content: const Text('Профилден чыгууну каалайсызбы?'),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Жок'),
+          ),
+          LinkRow(
+            title: 'Колдонмо жөнүндө',
+            divider: false,
+            onTap: () => _openInfo(
+              context,
+              'Колдонмо жөнүндө',
+              'Kitapp — кыргыз тилиндеги электрондук китептерди окуу үчүн колдонмо.\n\nВерсия 1.0.0',
+            ),
+          ),
+          if (state.isAuthenticated) ...[
+            const SizedBox(height: 20),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.danger,
+                  padding: EdgeInsets.zero,
+                ),
+                onPressed: () => showDialog<void>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('Чыгуу'),
+                    content: const Text('Профилден чыгууну каалайсызбы?'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Жок'),
+                      ),
+                      TextButton(
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppColors.danger,
+                        ),
+                        onPressed: () async {
+                          Navigator.pop(context);
+                          await state.logout();
+                        },
+                        child: const Text('Чыгуу'),
+                      ),
+                    ],
                   ),
-                  FilledButton(
-                    onPressed: () async {
-                      Navigator.pop(context);
-                      await state.logout();
-                    },
-                    child: const Text('Ооба'),
-                  ),
-                ],
+                ),
+                child: const Text('Чыгуу'),
               ),
             ),
-            icon: const Icon(Icons.logout_rounded),
-            label: const Text('Чыгуу'),
-          ),
+          ],
         ],
       ),
     );
   }
 }
 
-class _ProfileGroup extends StatelessWidget {
-  const _ProfileGroup({required this.children});
-  final List<Widget> children;
+class _Count extends StatelessWidget {
+  const _Count({required this.value, required this.label});
+
+  final int value;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.surface,
-      borderRadius: BorderRadius.circular(16),
-      clipBehavior: Clip.antiAlias,
-      child: Column(children: children),
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '$value',
+              style: const TextStyle(
+                fontFamily: AppFonts.serif,
+                fontSize: 24,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(label, style: AppText.meta),
+          ],
+        ),
+      ),
     );
   }
 }
 
-class _ProfileRow extends StatelessWidget {
-  const _ProfileRow({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
+class _GroupLabel extends StatelessWidget {
+  const _GroupLabel(this.text);
 
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
+  final String text;
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 3),
-      leading: Container(
-        width: 38,
-        height: 38,
-        decoration: const BoxDecoration(
-          color: AppColors.greenSoft,
-          shape: BoxShape.circle,
+    return Padding(
+      padding: const EdgeInsets.only(top: 24, bottom: 2),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: AppColors.muted,
         ),
-        child: Icon(icon, color: AppColors.green, size: 20),
       ),
-      title: Text(
-        title,
-        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
-      ),
-      subtitle: Text(
-        subtitle,
-        style: const TextStyle(fontSize: 10, color: AppColors.muted),
-      ),
-      trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
-      onTap: onTap,
     );
   }
 }
@@ -217,21 +226,17 @@ class _InfoPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
-      ),
+      appBar: AppBar(),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 480),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Align(
-              alignment: Alignment.topLeft,
-              child: Text(
-                body,
-                style: const TextStyle(fontSize: 14, height: 1.5),
-              ),
-            ),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+            children: [
+              Text(title, style: AppText.pageTitle),
+              const SizedBox(height: 16),
+              Text(body, style: AppText.body),
+            ],
           ),
         ),
       ),

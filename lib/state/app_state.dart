@@ -27,7 +27,8 @@ class AppStateController extends ChangeNotifier {
     final state = AppStateController._(prefs, ApiClient(prefs));
     state._showAdult = prefs.getBool('show_adult') ?? false;
     state._loadLocalProgress();
-    if (state.isAuthenticated) await state.refresh();
+    // The catalog is public, so guests can browse before signing in.
+    await state.refresh();
     return state;
   }
 
@@ -61,6 +62,7 @@ class AppStateController extends ChangeNotifier {
   bool isRented(Book book) => rentalEnd(book)?.isAfter(DateTime.now()) ?? false;
   bool hasAccess(Book book) => book.isFree || _libraryIds.contains(book.id);
   double progressFor(Book book) => _progress[book.id] ?? 0;
+  bool isFinished(Book book) => progressFor(book) >= .98;
 
   Future<String?> requestOtp(String phone) => api.requestOtp(phone);
 
@@ -74,10 +76,10 @@ class AppStateController extends ChangeNotifier {
   Future<void> logout() async {
     await api.logout();
     _clearSession();
+    await refresh();
   }
 
   void _clearSession() {
-    _books = const [];
     _library = const [];
     _recent = const [];
     _libraryIds.clear();
@@ -93,14 +95,15 @@ class AppStateController extends ChangeNotifier {
     _error = null;
     notifyListeners();
     try {
+      final signedIn = isAuthenticated;
       final results = await Future.wait([
         api.catalog(),
-        api.library(),
-        api.recent(),
+        if (signedIn) api.library(),
+        if (signedIn) api.recent(),
       ]);
       _books = results[0] as List<Book>;
-      _library = results[1] as List<Book>;
-      _recent = results[2] as List<RecentBook>;
+      _library = signedIn ? results[1] as List<Book> : const [];
+      _recent = signedIn ? results[2] as List<RecentBook> : const [];
       _libraryIds
         ..clear()
         ..addAll(_library.map((book) => book.id));

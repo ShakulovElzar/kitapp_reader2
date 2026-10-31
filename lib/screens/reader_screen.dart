@@ -10,6 +10,7 @@ import 'package:http/http.dart' as http;
 import '../models/book.dart';
 import '../services/api_client.dart';
 import '../state/app_state.dart';
+import '../theme/app_theme.dart';
 import '../theme/reader_palette.dart';
 import '../widgets/reader_panel.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -97,9 +98,9 @@ class _ReaderScreenState extends State<ReaderScreen>
   bool _didNavigateDrag = false;
 
   // sepia default
-  Color _backgroundColor = const Color(0xFFF4E7D3);
+  Color _backgroundColor = AppColors.paper;
 
-  Color _textColor = const Color(0xFF3E2F22);
+  Color _textColor = AppColors.body;
 
   String _selectedTheme = 'sepia';
 
@@ -148,7 +149,7 @@ class _ReaderScreenState extends State<ReaderScreen>
 
   Future<void> _loadReaderPreferences() async {
     final prefs = await SharedPreferences.getInstance();
-    final theme = ReaderTheme.byId(prefs.getString('reader_theme') ?? 'sepia');
+    final theme = ReaderTheme.byId(prefs.getString('reader_theme') ?? 'light');
     _fontSize = (prefs.getInt('reader_font_size') ?? 120).clamp(80, 200);
     _brightness = (prefs.getDouble('reader_brightness') ?? 1.0).clamp(0.3, 1.0);
     _pageMargins = (prefs.getDouble('reader_page_margins') ?? 20).clamp(0, 48);
@@ -735,6 +736,8 @@ class _ReaderScreenState extends State<ReaderScreen>
       if (chapterPages[i] <= _currentPage) currentChapter = i;
     }
     _menuTimer?.cancel();
+    // After jumping to a chapter, show the page, not the panel.
+    var chapterChosen = false;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -748,6 +751,7 @@ class _ReaderScreenState extends State<ReaderScreen>
           currentIndex: currentChapter,
 
           onChapterTap: (index) async {
+            chapterChosen = true;
             final link = _tableOfContents[index];
 
             final locator = Locator(
@@ -773,10 +777,10 @@ class _ReaderScreenState extends State<ReaderScreen>
       }
 
       setState(() {
-        _showMenu = true;
+        _showMenu = !chapterChosen;
       });
 
-      _startMenuTimer();
+      if (!chapterChosen) _startMenuTimer();
     });
   }
 
@@ -1315,14 +1319,14 @@ class _ReaderScreenState extends State<ReaderScreen>
                                               icon: const Icon(
                                                 Icons.chevron_left,
                                                 size: 24,
-                                                color: Colors.white,
+                                                color: AppColors.ink,
                                               ),
                                             ),
 
                                             Text(
                                               '$_currentBookmarkIndex / ${_bookmarks.length}',
                                               style: const TextStyle(
-                                                color: Colors.white,
+                                                color: AppColors.ink,
                                                 fontSize: 12,
                                                 fontWeight: FontWeight.w400,
                                               ),
@@ -1361,7 +1365,7 @@ class _ReaderScreenState extends State<ReaderScreen>
                                               icon: const Icon(
                                                 Icons.chevron_right,
                                                 size: 24,
-                                                color: Colors.white,
+                                                color: AppColors.ink,
                                               ),
                                             ),
                                           ],
@@ -1419,7 +1423,7 @@ class _ReaderScreenState extends State<ReaderScreen>
                                                       Icons.close_rounded,
                                                       size: 20,
                                                       weight: 900,
-                                                      color: Color(0xFFD15D52),
+                                                      color: AppColors.danger,
                                                     ),
                                                   ),
                                                 ),
@@ -1466,45 +1470,23 @@ class _ReaderLoading extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ColoredBox(
-      color: const Color(0xFFF4E7D3),
+      color: AppColors.paper,
       child: SafeArea(
         child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 58,
-                height: 58,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0B6B35),
-                  borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: AppText.bookTitle,
                 ),
-                child: const Icon(
-                  Icons.auto_stories_rounded,
-                  color: Colors.white,
-                  size: 30,
-                ),
-              ),
-              const SizedBox(height: 18),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Color(0xFF3E2F22),
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 16),
-              const SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.5,
-                  color: Color(0xFF0B6B35),
-                ),
-              ),
-            ],
+                const SizedBox(height: 20),
+                const SizedBox(width: 120, child: LinearProgressIndicator()),
+              ],
+            ),
           ),
         ),
       ),
@@ -1525,38 +1507,33 @@ class _ReaderLoadError extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ColoredBox(
-      color: const Color(0xFFF4E7D3),
+      color: AppColors.paper,
       child: SafeArea(
         child: Center(
           child: Padding(
             padding: const EdgeInsets.all(28),
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Icon(
-                  Icons.menu_book_outlined,
-                  size: 52,
-                  color: Color(0xFF0B6B35),
-                ),
-                const SizedBox(height: 14),
                 const Text(
                   'Китеп ачылган жок',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                  textAlign: TextAlign.center,
+                  style: AppText.bookTitle,
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 8),
                 Text(
                   unsupported
                       ? 'Азырынча китептерди веб-версияда гана окууга болот.'
-                      : 'Файлды кайра жүктөп көрүңүз.',
+                      : 'Интернетти текшерип, кайра аракет кылыңыз.',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: Color(0xFF6E6258)),
+                  style: AppText.body,
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 22),
                 if (!unsupported)
-                  FilledButton.icon(
+                  FilledButton(
                     onPressed: onRetry,
-                    icon: const Icon(Icons.refresh_rounded),
-                    label: const Text('Кайра аракет кылуу'),
+                    child: const Text('Кайра аракет кылуу'),
                   ),
                 TextButton(
                   onPressed: () => Navigator.maybePop(context),

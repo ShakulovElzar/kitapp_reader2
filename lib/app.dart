@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import 'screens/app_shell.dart';
-import 'screens/phone_auth_screen.dart';
 import 'state/app_state.dart';
 import 'theme/app_theme.dart';
 
@@ -20,9 +19,8 @@ class KitappApp extends StatelessWidget {
           title: 'Kitapp',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.light,
-          home: state.isAuthenticated
-              ? const AppShell()
-              : const PhoneAuthScreen(),
+          // Guests browse the catalog; signing in is asked for on buy or read.
+          home: const AppShell(),
         ),
       ),
     );

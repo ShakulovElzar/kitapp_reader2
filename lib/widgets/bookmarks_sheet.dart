@@ -82,7 +82,7 @@ class _BookmarksSheetState extends State<BookmarksSheet> {
     final value = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Кыстарманын атын өзгөртүү'),
+        title: const Text('Белгинин атын өзгөртүү'),
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -111,7 +111,7 @@ class _BookmarksSheetState extends State<BookmarksSheet> {
   String _title(Locator locator) =>
       _titles[locator.json] ??
       locator.title ??
-      '${locator.locations?.position ?? 1}-беттеги кыстарма';
+      '${locator.locations?.position ?? 1}-беттеги белги';
 
   @override
   Widget build(BuildContext context) {
@@ -120,7 +120,7 @@ class _BookmarksSheetState extends State<BookmarksSheet> {
         .where((item) => _title(item).toLowerCase().contains(query))
         .toList();
     return ReaderListScaffold(
-      title: 'КЫСТАРМАЛАР',
+      title: 'Белгилер',
       child: Column(
         children: [
           const SizedBox(height: 14),
@@ -130,14 +130,14 @@ class _BookmarksSheetState extends State<BookmarksSheet> {
               onChanged: (value) => setState(() => _search = value),
               decoration: const InputDecoration(
                 prefixIcon: Icon(Icons.search),
-                hintText: 'Кыстармадан издөө...',
+                hintText: 'Белгилерден издөө',
               ),
             ),
           ),
           const SizedBox(height: 8),
           Expanded(
             child: filtered.isEmpty
-                ? const Center(child: Text('Кыстармалар жок'))
+                ? const Center(child: Text('Белгилер азырынча жок'))
                 : ListView.separated(
                     padding: const EdgeInsets.all(18),
                     itemCount: filtered.length,
@@ -153,7 +153,7 @@ class _BookmarksSheetState extends State<BookmarksSheet> {
                           ),
                           title: Semantics(
                             button: true,
-                            label: 'Кыстарманы ачуу: ${_title(locator)}',
+                            label: 'Белгини ачуу: ${_title(locator)}',
                             onTap: () {
                               Navigator.pop(context);
                               widget.onBookmarkTap(locator);
@@ -168,7 +168,7 @@ class _BookmarksSheetState extends State<BookmarksSheet> {
                             widget.onBookmarkTap(locator);
                           },
                           trailing: PopupMenuButton<String>(
-                            tooltip: 'Кыстарма аракеттери',
+                            tooltip: 'Белги менен иштөө',
                             onSelected: (value) => value == 'rename'
                                 ? _rename(locator)
                                 : _delete(locator),

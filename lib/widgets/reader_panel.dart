@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_theme.dart';
 import '../theme/reader_palette.dart';
 
 enum ReaderPanelTab { contents, settings }
 
-/// Round buttons shown at the top of the page while the panel is open.
+/// Back and bookmark buttons shown at the top of the page while the panel is open.
 class ReaderTopButtons extends StatelessWidget {
   const ReaderTopButtons({
     super.key,
@@ -21,38 +22,35 @@ class ReaderTopButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final top = MediaQuery.of(context).padding.top + 12;
+    final top = MediaQuery.of(context).padding.top + 10;
     return IgnorePointer(
       ignoring: !visible,
       child: AnimatedOpacity(
         opacity: visible ? 1 : 0,
-        duration: const Duration(milliseconds: 180),
+        duration: const Duration(milliseconds: 160),
         child: Padding(
-          padding: EdgeInsets.fromLTRB(16, top, 16, 0),
+          padding: EdgeInsets.fromLTRB(14, top, 14, 0),
           child: Row(
             children: [
               _RoundButton(
-                tooltip: 'Чыгуу',
-                color: ReaderPalette.backButton,
+                tooltip: 'Китептен чыгуу',
                 onTap: onBack,
                 child: const Icon(
                   Icons.arrow_back_ios_new_rounded,
-                  color: Colors.white,
-                  size: 22,
+                  color: AppColors.ink,
+                  size: 19,
                 ),
               ),
               const Spacer(),
               _RoundButton(
-                tooltip: isBookmarked ? 'Кыстарманы өчүрүү' : 'Кыстарма кошуу',
-                color: Colors.white,
-                border: const Color(0x22000000),
+                tooltip: isBookmarked ? 'Белгини өчүрүү' : 'Белги коюу',
                 onTap: onBookmarkToggle,
                 child: Icon(
                   isBookmarked
                       ? Icons.bookmark_rounded
                       : Icons.bookmark_border_rounded,
-                  color: ReaderPalette.bookmark,
-                  size: 28,
+                  color: AppColors.green,
+                  size: 24,
                 ),
               ),
             ],
@@ -66,15 +64,11 @@ class ReaderTopButtons extends StatelessWidget {
 class _RoundButton extends StatelessWidget {
   const _RoundButton({
     required this.tooltip,
-    required this.color,
     required this.onTap,
     required this.child,
-    this.border,
   });
 
   final String tooltip;
-  final Color color;
-  final Color? border;
   final VoidCallback onTap;
   final Widget child;
 
@@ -83,22 +77,21 @@ class _RoundButton extends StatelessWidget {
     return Tooltip(
       message: tooltip,
       child: Material(
-        color: color,
-        shape: CircleBorder(
-          side: border == null ? BorderSide.none : BorderSide(color: border!),
-        ),
+        color: Colors.white,
+        shape: const CircleBorder(side: BorderSide(color: AppColors.line)),
+        shadowColor: const Color(0x33191B19),
         elevation: 2,
         child: InkWell(
           customBorder: const CircleBorder(),
           onTap: onTap,
-          child: SizedBox(width: 52, height: 52, child: Center(child: child)),
+          child: SizedBox(width: 46, height: 46, child: Center(child: child)),
         ),
       ),
     );
   }
 }
 
-/// Dark bottom panel with Contents / Settings tabs and a Search shortcut.
+/// White bottom panel: reading position, then Contents / Text / Search.
 class ReaderPanel extends StatelessWidget {
   const ReaderPanel({
     super.key,
@@ -177,44 +170,110 @@ class ReaderPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.of(context).padding.bottom;
+    final media = MediaQuery.of(context);
+    final settings = tab == ReaderPanelTab.settings;
     return IgnorePointer(
       ignoring: !visible,
       child: AnimatedSlide(
         offset: visible ? Offset.zero : const Offset(0, 1),
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeOutCubic,
-        child: Theme(
-          data: ReaderPalette.theme(context),
-          child: Container(
-            decoration: const BoxDecoration(
-              gradient: ReaderPalette.panelGradient,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-              boxShadow: [BoxShadow(color: Color(0x55000000), blurRadius: 24)],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _PanelHeader(
-                  title: tab == ReaderPanelTab.contents
-                      ? 'МАЗМУНУ'
-                      : 'ЖӨНДӨӨЛӨР',
-                  onClose: onClose,
-                ),
-                AnimatedSize(
-                  duration: const Duration(milliseconds: 200),
-                  child: tab == ReaderPanelTab.contents
-                      ? _ContentsTab(panel: this)
-                      : _SettingsTab(panel: this),
-                ),
-                const Divider(height: 1, color: ReaderPalette.divider),
-                _TabBar(
-                  tab: tab,
-                  onTabChanged: onTabChanged,
-                  onSearchTap: onSearchTap,
-                ),
-                SizedBox(height: bottomInset),
-              ],
+        child: Center(
+          heightFactor: 1,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+                border: Border(top: BorderSide(color: AppColors.line)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0x33191B19),
+                    blurRadius: 30,
+                    spreadRadius: -16,
+                    offset: Offset(0, -8),
+                  ),
+                ],
+              ),
+              padding: EdgeInsets.fromLTRB(
+                20,
+                8,
+                20,
+                16 + media.padding.bottom,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Semantics(
+                      button: true,
+                      label: 'Панелди жабуу',
+                      child: GestureDetector(
+                        onTap: onClose,
+                        onVerticalDragEnd: (details) {
+                          if ((details.primaryVelocity ?? 0) > 0) onClose();
+                        },
+                        child: Container(
+                          width: 64,
+                          height: 20,
+                          alignment: Alignment.center,
+                          child: Container(
+                            width: 36,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: AppColors.field,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 200),
+                    alignment: Alignment.topCenter,
+                    child: settings
+                        ? ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxHeight: media.size.height * .58,
+                            ),
+                            child: SingleChildScrollView(
+                              child: _SettingsTab(panel: this),
+                            ),
+                          )
+                        : _PositionTab(panel: this),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      _PanelButton(
+                        icon: Icons.format_list_bulleted_rounded,
+                        label: 'Мазмуну',
+                        onTap: onChaptersTap,
+                      ),
+                      const SizedBox(width: 8),
+                      _PanelButton(
+                        label: 'Текст',
+                        glyph: 'Aa',
+                        selected: settings,
+                        onTap: () => onTabChanged(
+                          settings
+                              ? ReaderPanelTab.contents
+                              : ReaderPanelTab.settings,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _PanelButton(
+                        icon: Icons.search_rounded,
+                        label: 'Издөө',
+                        onTap: onSearchTap,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -223,133 +282,68 @@ class ReaderPanel extends StatelessWidget {
   }
 }
 
-class _PanelHeader extends StatelessWidget {
-  const _PanelHeader({required this.title, required this.onClose});
-
-  final String title;
-  final VoidCallback onClose;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 12, 14, 12),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: ReaderPalette.divider)),
-      ),
-      child: Row(
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              color: ReaderPalette.accent,
-              fontWeight: FontWeight.w800,
-              fontSize: 15,
-              letterSpacing: 0.6,
-            ),
-          ),
-          const Spacer(),
-          Tooltip(
-            message: 'Жабуу',
-            child: Material(
-              color: const Color(0xFF0E0D24),
-              shape: const CircleBorder(),
-              child: InkWell(
-                customBorder: const CircleBorder(),
-                onTap: onClose,
-                child: const SizedBox(
-                  width: 40,
-                  height: 40,
-                  child: Icon(
-                    Icons.keyboard_arrow_down_rounded,
-                    color: ReaderPalette.accent,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TabBar extends StatelessWidget {
-  const _TabBar({
-    required this.tab,
-    required this.onTabChanged,
-    required this.onSearchTap,
-  });
-
-  final ReaderPanelTab tab;
-  final ValueChanged<ReaderPanelTab> onTabChanged;
-  final VoidCallback onSearchTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          _TabButton(
-            icon: Icons.menu_book_outlined,
-            label: 'Мазмуну',
-            selected: tab == ReaderPanelTab.contents,
-            onTap: () => onTabChanged(ReaderPanelTab.contents),
-          ),
-          _TabButton(
-            icon: Icons.tune_rounded,
-            label: 'Жөндөөлөр',
-            selected: tab == ReaderPanelTab.settings,
-            onTap: () => onTabChanged(ReaderPanelTab.settings),
-          ),
-          _TabButton(
-            icon: Icons.search_rounded,
-            label: 'Издөө',
-            selected: false,
-            onTap: onSearchTap,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TabButton extends StatelessWidget {
-  const _TabButton({
-    required this.icon,
+class _PanelButton extends StatelessWidget {
+  const _PanelButton({
     required this.label,
-    required this.selected,
     required this.onTap,
+    this.icon,
+    this.glyph,
+    this.selected = false,
   });
 
-  final IconData icon;
+  final IconData? icon;
+  final String? glyph;
   final String label;
   final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? Colors.white : ReaderPalette.accent;
+    final color = selected ? AppColors.green : AppColors.ink;
     return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: color, size: 26),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  color: color,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
+      child: Semantics(
+        button: true,
+        selected: selected,
+        child: Material(
+          color: selected ? AppColors.greenSoft : AppColors.paper,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+            side: BorderSide(
+              color: selected ? AppColors.green : AppColors.line,
+            ),
+          ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: onTap,
+            child: SizedBox(
+              height: 58,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (icon != null)
+                    Icon(icon, size: 21, color: color)
+                  else
+                    Text(
+                      glyph!,
+                      style: TextStyle(
+                        fontFamily: AppFonts.serif,
+                        fontSize: 18,
+                        height: 1.15,
+                        color: color,
+                      ),
+                    ),
+                  const SizedBox(height: 3),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: color,
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -357,171 +351,118 @@ class _TabButton extends StatelessWidget {
   }
 }
 
-class _ContentsTab extends StatelessWidget {
-  const _ContentsTab({required this.panel});
+/// Where you are in the book: page, a scrubber, jump history and bookmarks.
+class _PositionTab extends StatelessWidget {
+  const _PositionTab({required this.panel});
 
   final ReaderPanel panel;
 
   @override
   Widget build(BuildContext context) {
-    final percent = (panel.progress * 100).clamp(0, 100);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            panel.title,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            panel.author,
-            style: const TextStyle(
-              color: ReaderPalette.muted,
-              fontStyle: FontStyle.italic,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 14),
-          SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              trackHeight: 6,
-              activeTrackColor: ReaderPalette.bookmark,
-              inactiveTrackColor: const Color(0xFF4A4870),
-              thumbColor: Colors.white,
-              overlayColor: ReaderPalette.bookmark.withValues(alpha: .2),
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
-              trackShape: const RoundedRectSliderTrackShape(),
-            ),
-            child: Slider(
-              padding: EdgeInsets.zero,
-              value: panel.progress.clamp(0.0, 1.0),
-              onChanged: panel.onProgressChanged,
-              onChangeEnd: panel.onProgressChangeEnd,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Text(
-                '${percent.toStringAsFixed(percent < 10 ? 1 : 0)}%',
-                style: const TextStyle(color: ReaderPalette.muted),
-              ),
-              const Spacer(),
-              _HistoryArrow(
-                icon: Icons.undo_rounded,
-                tooltip: 'Мурунку орун',
-                onTap: panel.canGoBack ? panel.onBackTap : null,
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Text(
-                  '${panel.currentPage} / ${panel.totalPages}-бет',
-                  style: const TextStyle(color: ReaderPalette.muted),
-                ),
-              ),
-              _HistoryArrow(
-                icon: Icons.redo_rounded,
-                tooltip: 'Кийинки орун',
-                onTap: panel.canGoForward ? panel.onForwardTap : null,
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          Row(
-            children: [
-              Expanded(
-                child: _ActionTile(
-                  icon: Icons.format_list_bulleted_rounded,
-                  iconColor: Colors.white,
-                  label: 'Бөлүмдөр',
-                  onTap: panel.onChaptersTap,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _ActionTile(
-                  icon: Icons.bookmark_rounded,
-                  iconColor: ReaderPalette.bookmark,
-                  label: 'Кыстармалар',
-                  onTap: panel.onBookmarksTap,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _HistoryArrow extends StatelessWidget {
-  const _HistoryArrow({required this.icon, required this.tooltip, this.onTap});
-
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return IconButton(
-      tooltip: tooltip,
-      visualDensity: VisualDensity.compact,
-      onPressed: onTap,
-      icon: Icon(icon, size: 20),
-      color: ReaderPalette.accent,
-      disabledColor: ReaderPalette.divider,
-    );
-  }
-}
-
-class _ActionTile extends StatelessWidget {
-  const _ActionTile({
-    required this.icon,
-    required this.iconColor,
-    required this.label,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final Color iconColor;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: ReaderPalette.card,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(icon, color: iconColor, size: 26),
-              const SizedBox(height: 12),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: ReaderPalette.muted,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 15,
-                ),
-              ),
-            ],
+    final percent = (panel.progress * 100).clamp(0, 100).round();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          panel.title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontFamily: AppFonts.serif,
+            fontSize: 19,
+            fontWeight: FontWeight.w600,
           ),
         ),
-      ),
+        const SizedBox(height: 2),
+        Text(panel.author, style: AppText.meta),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Text(
+              '${panel.currentPage}-бет ${panel.totalPages}ден',
+              style: AppText.meta,
+            ),
+            const Spacer(),
+            Text('$percent%', style: AppText.meta),
+          ],
+        ),
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            trackHeight: 3,
+            activeTrackColor: AppColors.green,
+            inactiveTrackColor: AppColors.line,
+            thumbColor: Colors.white,
+            overlayColor: AppColors.green.withValues(alpha: .12),
+            thumbShape: const _RingThumb(),
+          ),
+          child: Slider(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            value: panel.progress.clamp(0.0, 1.0),
+            onChanged: panel.onProgressChanged,
+            onChangeEnd: panel.onProgressChangeEnd,
+          ),
+        ),
+        Row(
+          children: [
+            IconButton(
+              tooltip: 'Мурунку орунга',
+              onPressed: panel.canGoBack ? panel.onBackTap : null,
+              icon: const Icon(Icons.undo_rounded, size: 20),
+              color: AppColors.ink,
+              disabledColor: AppColors.field,
+            ),
+            IconButton(
+              tooltip: 'Кийинки орунга',
+              onPressed: panel.canGoForward ? panel.onForwardTap : null,
+              icon: const Icon(Icons.redo_rounded, size: 20),
+              color: AppColors.ink,
+              disabledColor: AppColors.field,
+            ),
+            const Spacer(),
+            TextButton.icon(
+              onPressed: panel.onBookmarksTap,
+              icon: const Icon(Icons.bookmarks_outlined, size: 18),
+              label: const Text('Белгилер'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// White thumb with a green ring, matching the design's scrubber.
+class _RingThumb extends SliderComponentShape {
+  const _RingThumb();
+
+  @override
+  Size getPreferredSize(bool isEnabled, bool isDiscrete) =>
+      const Size.square(18);
+
+  @override
+  void paint(
+    PaintingContext context,
+    Offset center, {
+    required Animation<double> activationAnimation,
+    required Animation<double> enableAnimation,
+    required bool isDiscrete,
+    required TextPainter labelPainter,
+    required RenderBox parentBox,
+    required SliderThemeData sliderTheme,
+    required TextDirection textDirection,
+    required double value,
+    required double textScaleFactor,
+    required Size sizeWithOverflow,
+  }) {
+    final canvas = context.canvas;
+    canvas.drawCircle(center, 9, Paint()..color = Colors.white);
+    canvas.drawCircle(
+      center,
+      8,
+      Paint()
+        ..color = AppColors.green
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2,
     );
   }
 }
@@ -533,86 +474,111 @@ class _SettingsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              for (final theme in ReaderTheme.all) ...[
-                Expanded(
-                  child: _ThemeSwatch(
-                    theme: theme,
-                    selected: theme.id == panel.selectedTheme,
-                    onTap: () => panel.onThemeSelected(theme.id),
-                  ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          'Текст',
+          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+        ),
+        const _Label('Фон'),
+        Row(
+          children: [
+            for (final theme in ReaderTheme.all) ...[
+              Expanded(
+                child: _ThemeSwatch(
+                  theme: theme,
+                  selected: theme.id == panel.selectedTheme,
+                  onTap: () => panel.onThemeSelected(theme.id),
                 ),
-                if (theme != ReaderTheme.all.last) const SizedBox(width: 14),
-              ],
+              ),
+              if (theme != ReaderTheme.all.last) const SizedBox(width: 10),
             ],
-          ),
-          const SizedBox(height: 16),
-          _FontPicker(
-            fontFamily: panel.fontFamily,
-            onChanged: panel.onFontChanged,
-          ),
-          const Divider(height: 24, color: ReaderPalette.divider),
+          ],
+        ),
+        const _Label('Өлчөмү'),
+        _SizeStepper(
+          value: panel.fontSize,
+          onChanged: (value) {
+            panel.onFontSizeChanged(value);
+            panel.onSettingsChangeEnd();
+          },
+        ),
+        const _Label('Шрифт'),
+        for (final (index, font) in readerFonts.indexed)
           InkWell(
-            borderRadius: BorderRadius.circular(10),
-            onTap: () => panel.onHyphenateChanged(!panel.hyphenate),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
+            onTap: () => panel.onFontChanged(font),
+            child: Container(
+              height: 48,
+              decoration: BoxDecoration(
+                border: index < readerFonts.length - 1
+                    ? const Border(
+                        bottom: BorderSide(color: AppColors.lineSoft),
+                      )
+                    : null,
+              ),
               child: Row(
                 children: [
-                  _RoundCheck(checked: panel.hyphenate),
-                  const SizedBox(width: 12),
-                  const Text(
-                    'Сөздөрдү муунга бөлүү',
-                    style: TextStyle(color: ReaderPalette.muted, fontSize: 15),
+                  Expanded(
+                    child: Text(
+                      font,
+                      style: TextStyle(fontFamily: font, fontSize: 17),
+                    ),
                   ),
+                  if (font == panel.fontFamily)
+                    const Icon(
+                      Icons.check_rounded,
+                      color: AppColors.green,
+                      size: 22,
+                    ),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 16),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _VerticalLevel(
-                icon: Icons.text_fields_rounded,
-                label: 'Тамга\nөлчөмү',
-                value: (panel.fontSize - 80) / 120,
-                onChanged: (v) =>
-                    panel.onFontSizeChanged(((80 + v * 120) / 10).round() * 10),
-                onChangeEnd: panel.onSettingsChangeEnd,
-              ),
-              _VerticalLevel(
-                icon: Icons.article_outlined,
-                label: 'Четтер',
-                value: panel.margins / 48,
-                onChanged: (v) =>
-                    panel.onMarginsChanged((v * 12).round() * 4.0),
-                onChangeEnd: panel.onSettingsChangeEnd,
-              ),
-              _VerticalLevel(
-                icon: Icons.format_line_spacing_rounded,
-                label: 'Сап\nаралыгы',
-                value: (panel.lineHeight - 1.0) / 1.2,
-                onChanged: (v) =>
-                    panel.onLineHeightChanged((10 + v * 12).round() / 10),
-                onChangeEnd: panel.onSettingsChangeEnd,
-              ),
-              _VerticalLevel(
-                icon: Icons.wb_sunny_outlined,
-                label: 'Жарыктык',
-                value: (panel.brightness - 0.3) / 0.7,
-                onChanged: (v) => panel.onBrightnessChanged(0.3 + v * 0.7),
-                onChangeEnd: panel.onSettingsChangeEnd,
-              ),
-            ],
+        const _Label('Сап аралыгы'),
+        _LineSlider(
+          value: (panel.lineHeight - 1.0) / 1.2,
+          onChanged: (v) =>
+              panel.onLineHeightChanged((10 + v * 12).round() / 10),
+          onChangeEnd: panel.onSettingsChangeEnd,
+        ),
+        const _Label('Четтер'),
+        _LineSlider(
+          value: panel.margins / 48,
+          onChanged: (v) => panel.onMarginsChanged((v * 12).round() * 4.0),
+          onChangeEnd: panel.onSettingsChangeEnd,
+        ),
+        const _Label('Жарыктык'),
+        _LineSlider(
+          value: (panel.brightness - 0.3) / 0.7,
+          onChanged: (v) => panel.onBrightnessChanged(0.3 + v * 0.7),
+          onChangeEnd: panel.onSettingsChangeEnd,
+        ),
+        const SizedBox(height: 6),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text(
+            'Сөздөрдү муунга бөлүү',
+            style: TextStyle(fontSize: 15),
           ),
-        ],
-      ),
+          value: panel.hyphenate,
+          onChanged: panel.onHyphenateChanged,
+        ),
+      ],
+    );
+  }
+}
+
+class _Label extends StatelessWidget {
+  const _Label(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 16, bottom: 8),
+      child: Text(text, style: AppText.label),
     );
   }
 }
@@ -633,257 +599,134 @@ class _ThemeSwatch extends StatelessWidget {
     return Semantics(
       button: true,
       selected: selected,
-      label: 'Тема: ${theme.id}',
+      label: 'Фон: ${theme.name}',
       child: Material(
         color: theme.background,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(10),
           side: BorderSide(
-            color: selected ? ReaderPalette.accent : const Color(0xFF8E8CB0),
-            width: selected ? 3 : 1,
+            color: selected ? AppColors.green : AppColors.field,
+            width: selected ? 2 : 1,
           ),
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
           child: SizedBox(
-            height: 40,
-            child: selected
-                ? Icon(Icons.check_rounded, color: theme.text, size: 22)
-                : null,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _FontPicker extends StatefulWidget {
-  const _FontPicker({required this.fontFamily, required this.onChanged});
-
-  final String fontFamily;
-  final ValueChanged<String> onChanged;
-
-  @override
-  State<_FontPicker> createState() => _FontPickerState();
-}
-
-class _FontPickerState extends State<_FontPicker> {
-  late final PageController _controller = PageController(initialPage: _index);
-
-  int get _index =>
-      readerFonts.indexOf(widget.fontFamily).clamp(0, readerFonts.length - 1);
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _step(int delta) {
-    final next = (_index + delta) % readerFonts.length;
-    _controller.animateToPage(
-      next,
-      duration: const Duration(milliseconds: 200),
-      curve: Curves.easeOut,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        const Text(
-          'Шрифт',
-          style: TextStyle(color: ReaderPalette.muted, fontSize: 16),
-        ),
-        const SizedBox(width: 8),
-        IconButton(
-          tooltip: 'Мурунку шрифт',
-          visualDensity: VisualDensity.compact,
-          color: ReaderPalette.accent,
-          onPressed: () => _step(-1),
-          icon: const Icon(Icons.chevron_left_rounded),
-        ),
-        Expanded(
-          child: Column(
-            children: [
-              SizedBox(
-                height: 40,
-                child: PageView.builder(
-                  controller: _controller,
-                  itemCount: readerFonts.length,
-                  onPageChanged: (index) =>
-                      widget.onChanged(readerFonts[index]),
-                  itemBuilder: (context, index) => Center(
-                    child: Text(
-                      readerFonts[index],
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontFamily: readerFonts[index],
-                        fontSize: 21,
-                        color: Colors.white,
-                      ),
-                    ),
+            height: 60,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  'Aa',
+                  style: TextStyle(
+                    fontFamily: AppFonts.serif,
+                    fontSize: 18,
+                    height: 1.1,
+                    color: theme.text,
                   ),
                 ),
-              ),
-              const SizedBox(height: 4),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  for (var i = 0; i < readerFonts.length; i++)
-                    Container(
-                      width: 6,
-                      height: 6,
-                      margin: const EdgeInsets.symmetric(horizontal: 3),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: i == _index
-                            ? Colors.white
-                            : ReaderPalette.muted.withValues(alpha: .5),
-                      ),
-                    ),
-                ],
-              ),
-            ],
+                const SizedBox(height: 2),
+                Text(
+                  theme.name,
+                  style: TextStyle(fontSize: 12, color: theme.text),
+                ),
+              ],
+            ),
           ),
         ),
-        IconButton(
-          tooltip: 'Кийинки шрифт',
-          visualDensity: VisualDensity.compact,
-          color: ReaderPalette.accent,
-          onPressed: () => _step(1),
-          icon: const Icon(Icons.chevron_right_rounded),
-        ),
-      ],
+      ),
     );
   }
 }
 
-class _RoundCheck extends StatelessWidget {
-  const _RoundCheck({required this.checked});
+/// "A | 120% | A" stepper for the font size, 80–200% in steps of 10.
+class _SizeStepper extends StatelessWidget {
+  const _SizeStepper({required this.value, required this.onChanged});
 
-  final bool checked;
+  final int value;
+  final ValueChanged<int> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 150),
-      width: 30,
-      height: 30,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: checked ? ReaderPalette.accentStrong : const Color(0xFF1C1A3D),
-        border: Border.all(color: ReaderPalette.divider),
+    Widget step(String tooltip, double size, int delta) => Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: () {
+          final next = (value + delta).clamp(80, 200);
+          if (next != value) onChanged(next);
+        },
+        child: SizedBox(
+          width: 64,
+          height: 46,
+          child: Center(
+            child: Text(
+              'A',
+              style: TextStyle(fontFamily: AppFonts.serif, fontSize: size),
+            ),
+          ),
+        ),
       ),
-      child: checked
-          ? const Icon(Icons.check_rounded, size: 18, color: Colors.white)
-          : null,
+    );
+
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.line),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Row(
+        children: [
+          step('Кичирээк', 15, -10),
+          Expanded(
+            child: Container(
+              height: 46,
+              alignment: Alignment.center,
+              decoration: const BoxDecoration(
+                border: Border.symmetric(
+                  vertical: BorderSide(color: AppColors.line),
+                ),
+              ),
+              child: Text(
+                '$value%',
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+          step('Чоңураак', 22, 10),
+        ],
+      ),
     );
   }
 }
 
-/// Tall rounded bar that fills from the bottom; drag or tap to set a 0–1 value.
-class _VerticalLevel extends StatelessWidget {
-  const _VerticalLevel({
-    required this.icon,
-    required this.label,
+class _LineSlider extends StatelessWidget {
+  const _LineSlider({
     required this.value,
     required this.onChanged,
     required this.onChangeEnd,
   });
 
-  static const _height = 150.0;
-
-  final IconData icon;
-  final String label;
   final double value;
   final ValueChanged<double> onChanged;
   final VoidCallback onChangeEnd;
 
-  void _update(Offset local) {
-    onChanged((1 - local.dy / _height).clamp(0.0, 1.0));
-  }
-
   @override
   Widget build(BuildContext context) {
-    final level = value.clamp(0.0, 1.0);
-    final fill = 44 + level * (_height - 44);
-    return Expanded(
-      child: Column(
-        children: [
-          Semantics(
-            slider: true,
-            label: label.replaceAll('\n', ' '),
-            value: '${(level * 100).round()}%',
-            onIncrease: () {
-              onChanged((level + 0.1).clamp(0.0, 1.0));
-              onChangeEnd();
-            },
-            onDecrease: () {
-              onChanged((level - 0.1).clamp(0.0, 1.0));
-              onChangeEnd();
-            },
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onVerticalDragStart: (d) => _update(d.localPosition),
-              onVerticalDragUpdate: (d) => _update(d.localPosition),
-              onVerticalDragEnd: (_) => onChangeEnd(),
-              onTapUp: (d) {
-                _update(d.localPosition);
-                onChangeEnd();
-              },
-              child: Container(
-                width: 64,
-                height: _height,
-                clipBehavior: Clip.antiAlias,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF26234C),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: ReaderPalette.divider),
-                ),
-                child: Stack(
-                  children: [
-                    for (var i = 1; i < 4; i++)
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: _height * i / 4,
-                        child: Container(
-                          height: 1,
-                          color: ReaderPalette.divider.withValues(alpha: .6),
-                        ),
-                      ),
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      height: fill,
-                      child: Container(
-                        color: ReaderPalette.accentStrong,
-                        alignment: Alignment.bottomCenter,
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Icon(icon, color: Colors.white, size: 22),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: ReaderPalette.muted,
-              fontSize: 12,
-              height: 1.2,
-            ),
-          ),
-        ],
+    return SliderTheme(
+      data: SliderTheme.of(context).copyWith(
+        trackHeight: 3,
+        thumbShape: const _RingThumb(),
+        overlayColor: AppColors.green.withValues(alpha: .12),
+      ),
+      child: Slider(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        value: value.clamp(0.0, 1.0),
+        onChanged: onChanged,
+        onChangeEnd: (_) => onChangeEnd(),
       ),
     );
   }

@@ -169,7 +169,7 @@ class _SearchSheetState extends State<SearchSheet> {
   @override
   Widget build(BuildContext context) {
     return ReaderListScaffold(
-      title: 'ИЗДӨӨ',
+      title: 'Китептен издөө',
       child: Column(
         children: [
           const SizedBox(height: 14),
