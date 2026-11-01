@@ -28,7 +28,7 @@ Branch: `codex/full-app-reader-fixes`. Tested: server/admin builds, `flutter ana
 - [x] Resume reading from the server-saved locator; key local progress, bookmarks and settings by user ID; clear them on logout.
 - [x] Remove the unused MinIO/S3 config. Run the QA scripts against a separate `kitapp_test` DB. Test books ("adilet", "Probe PURCHASE/RENTAL") archived; the 93 test reader accounts are left in place (deleting them can't be undone). QA now runs with `npm run qa:api`.
 
-- [x] Reader redesign to match the reference screenshots: dark panel with Contents / Settings / Search tabs, round back and bookmark buttons, chapter list with page numbers, theme swatches, font picker, vertical sliders.
+- [x] Reader redesign to match the reference screenshots: dark panel with Contents / Settings / Search tabs, round back and bookmark buttons, chapter list with page numbers, theme swatches, font picker, vertical sliders. *(Later replaced by design A: light panel, same functions.)*
 
 ## Fixes that need no decision
 - [x] Duplicate author name, category, or slug, and blocking a reader who doesn't exist, return 500 errors. Map Prisma P2002 → 409 and P2025 → 404.
@@ -41,6 +41,25 @@ Branch: `codex/full-app-reader-fixes`. Tested: server/admin builds, `flutter ana
 - [x] `ReadingProgress` sync caps at 300 s per request, so seconds above that are lost after failed syncs.
 - [x] Profile "Purchases: N books" counts every free book.
 - [x] `web/index.html`: page title and description are still "kitapp_reader2" / "A new Flutter project."
+
+## Admin review — 2026-11-01
+
+Found while reviewing the admin before its redesign:
+- [x] A rental-only book could not be saved: the form showed a sale price of 0 but required at least 1.
+- [x] Lists showed "0 books" while loading, because there was no loading state.
+- [x] Payments always showed "Paid", whatever the real status was. Rentals did not show whether they had ended.
+- [x] Saving a book with new files and "Published" in one step failed: the status changed before the files were uploaded. Files now upload first.
+- [x] Renaming used `window.prompt`, and confirmations used `window.confirm`. Replaced with inline editing and in-app dialogs.
+- [x] Adding a book by a new author meant leaving the form. The book form can now create the author.
+- [x] `tool/qa_admin_ui.cjs` checked text that no longer existed. Rewritten for the new admin; run it with `npm run qa:admin`.
+
+Admin redesign (design A tokens, light sidebar, side-panel book editor) and new functions:
+- Book list: cover thumbnails (`coverUrl` added to `GET /admin/books`), search, status and genre filters, "files missing" filter.
+- Home page: list of books that need attention, latest payments, top books of the month.
+- Readers: search, active/blocked filter, block reason.
+- Report: period presets and CSV export.
+- Audit log: grouped by day, filter by record type, shows the book or author name.
+- Page and open book live in the URL hash, so a reload keeps them.
 
 ## Environment notes (not app bugs)
 - The root `node_modules` was corrupted (`commander` was missing files). Fixed with `npm ci`.

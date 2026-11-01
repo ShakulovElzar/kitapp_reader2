@@ -33,8 +33,9 @@ export type Book = {
   accessType: 'FREE' | 'PURCHASE' | 'RENTAL';
   isAdult: boolean;
   isNew: boolean;
-  coverKey?: string;
-  epubKey?: string;
+  coverKey?: string | null;
+  epubKey?: string | null;
+  coverUrl?: string | null;
   authorId: string;
   categoryId: string;
   author: Author;
@@ -56,7 +57,7 @@ export type Transaction = {
   id: string;
   amount: string | number;
   currency: string;
-  status: string;
+  status: 'PENDING' | 'COMPLETED' | 'REFUNDED' | 'CANCELLED';
   createdAt: string;
   endsAt?: string;
   book: Book;
@@ -89,6 +90,7 @@ export type AuditLog = {
   action: string;
   entity: string;
   entityId?: string;
+  metadata?: Record<string, unknown> | null;
   createdAt: string;
   admin: { name: string; email: string };
 };

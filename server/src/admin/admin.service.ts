@@ -114,8 +114,8 @@ export class AdminService {
     return { success: true };
   }
 
-  listBooks() {
-    return this.prisma.book.findMany({
+  async listBooks() {
+    const books = await this.prisma.book.findMany({
       where: { deletedAt: null },
       include: {
         author: true,
@@ -124,6 +124,11 @@ export class AdminService {
       },
       orderBy: { createdAt: 'desc' },
     });
+    // The admin shows cover thumbnails; covers have plain public URLs.
+    return Promise.all(books.map(async (book) => ({
+      ...book,
+      coverUrl: book.coverKey ? await this.storage.signedUrl(book.coverKey) : null,
+    })));
   }
 
   async createBook(dto: CreateBookDto, adminId: string) {
