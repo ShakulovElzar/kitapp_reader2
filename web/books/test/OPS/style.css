@@ -1,0 +1,112 @@
+.z {
+	font-family: 'Times New Roman', serif;
+	margin-right: 8pt;
+}
+
+.title {
+	font-size: 2.2em;
+	font-weight: bold;
+	margin: 1em 0px 0.5em 0px;
+	page-break-after: avoid;
+	page-break-inside: avoid;
+	text-align: center;
+}
+
+.p {
+	margin: 0px 0px 0.5em 0px;
+	text-align: inherit;
+	text-indent: 0px;
+}
+
+.title1 {
+	font-size: 1.5em;
+	font-weight: bold;
+	margin: 1em 0px 0.5em 1.563em;
+	page-break-after: avoid;
+	page-break-inside: avoid;
+	text-align: left;
+}
+
+.p1 {
+	margin: 0px;
+	text-align: justify;
+	text-indent: 1.5em;
+}
+
+.epigraph {
+	font-style: italic;
+	margin: 1em 1em 2em 30%;
+	text-align: left;
+}
+
+.image {
+	padding: 3px;
+	text-align: center;
+}
+
+.z1 {
+	max-width: 95%;
+}
+
+.empty-line {
+	height: 1em;
+	margin: 0px;
+}
+
+.title2 {
+	font-size: 1.8em;
+	font-weight: bold;
+	margin: 1em 0px 0.5em 0px;
+	page-break-after: avoid;
+	page-break-inside: avoid;
+	text-align: center;
+}
+
+.a {
+	font-size: 0.7em;
+	line-height: 0.1;
+	vertical-align: super;
+}
+
+.cite {
+	font-size: 0.95em;
+	margin: 0.5em 0px 0.5em 1em;
+}
+
+.subtitle {
+	font-style: italic;
+	font-weight: bold;
+	margin: 0.5em 2em;
+	page-break-after: avoid;
+	page-break-inside: avoid;
+	text-align: center;
+	text-indent: 0px;
+}
+
+@font-face {
+	font-family: 'Times New Roman';
+	font-style: italic;
+	font-weight: normal;
+	src: url(fonts/Times-New-Roman-400-Italic-7ddd9d15-cd5a-4672-af1a-23bf78226f0c.otf);
+}
+
+@font-face {
+	font-family: 'Times New Roman';
+	font-style: normal;
+	font-weight: normal;
+	src: url(fonts/Times-New-Roman-400-7ddd9d15-cd5a-4672-af1a-23bf78226f0c.otf);
+}
+
+@font-face {
+	font-family: 'Times New Roman';
+	font-style: italic;
+	font-weight: bold;
+	src: url(fonts/Times-New-Roman-700-Italic-7ddd9d15-cd5a-4672-af1a-23bf78226f0c.otf);
+}
+
+@font-face {
+	font-family: 'Times New Roman';
+	font-style: normal;
+	font-weight: bold;
+	src: url(fonts/Times-New-Roman-700-7ddd9d15-cd5a-4672-af1a-23bf78226f0c.otf);
+}

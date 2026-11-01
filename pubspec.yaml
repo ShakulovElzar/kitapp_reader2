@@ -37,6 +37,7 @@ dependencies:
   path_provider: ^2.1.5
   shared_preferences: ^2.5.5
   html: ^0.15.5
+  http: ^1.5.0
 
 dev_dependencies:
   flutter_test:
@@ -59,8 +60,30 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
-  assets:
-    - assets/books/
+
+  # Design A type: Golos Text for the interface, Literata for headings and
+  # reading. Both cover Kyrgyz Cyrillic (ң ө ү). Licences: assets/fonts/OFL-*.txt
+  fonts:
+    - family: Golos Text
+      fonts:
+        - asset: assets/fonts/GolosText-Regular.ttf
+        - asset: assets/fonts/GolosText-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/GolosText-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/GolosText-Bold.ttf
+          weight: 700
+    - family: Literata
+      fonts:
+        - asset: assets/fonts/Literata-Regular.ttf
+        - asset: assets/fonts/Literata-Italic.ttf
+          style: italic
+        - asset: assets/fonts/Literata-SemiBold.ttf
+          weight: 600
+    # Only for the font preview in reader settings; the book page loads it itself.
+    - family: PT Serif
+      fonts:
+        - asset: assets/fonts/PTSerif-Regular.ttf
 
   # To add assets to your application, add an assets section, like this:
   # assets:

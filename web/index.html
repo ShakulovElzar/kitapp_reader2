@@ -18,19 +18,284 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="Kitapp — кыргызча электрондук китептер">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="kitapp_reader2">
+  <meta name="apple-mobile-web-app-title" content="Kitapp">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>kitapp_reader2</title>
+  <title>Kitapp</title>
   <link rel="manifest" href="manifest.json">
+  <style>
+    /* Readium's bundled demo CSS reserves 96px for controls that Kitapp
+       renders in Flutter. Keep the embedded publication flush with its host. */
+    html body #wrapper,
+    html body #container,
+    html body #container iframe {
+      height: 100% !important;
+      min-height: 100% !important;
+      pointer-events: none;
+    }
+    /* The reader's platform view sits above Flutter's canvas in the DOM. Let taps
+       pass through so the Flutter panel and tap zones on top of it receive them. */
+    flt-platform-view:has(#container) {
+      pointer-events: none !important;
+    }
+    flt-semantics:not([role]):not([flt-tappable]) {
+      pointer-events: none !important;
+    }
+  </style>
+  <script src="readiumReader.js" defer></script>
+  <script>
+    (() => {
+      let pointerStart = null;
+      let readerPreferences = null;
+      let readerSearch = null;
+
+      // Readium keeps a spare hidden iframe; the reader works with the visible one.
+      const visibleFrame = () => {
+        const frames = [...document.querySelectorAll('#container iframe')];
+        return frames.find((frame) => frame.style.visibility !== 'hidden') ?? frames[0];
+      };
+
+      const readerDocument = () => {
+        const frame = visibleFrame();
+        try {
+          return frame?.contentDocument ?? null;
+        } catch (_) {
+          return null;
+        }
+      };
+
+      // Page styling goes through the Readium navigator so pagination re-flows;
+      // only search highlight styles are injected directly.
+      const applyPreferences = () => {
+        const content = readerDocument();
+        if (!content?.head) return false;
+        let style = content.getElementById('kitapp-reader-preferences');
+        if (!style) {
+          style = content.createElement('style');
+          style.id = 'kitapp-reader-preferences';
+          content.head.appendChild(style);
+        }
+        // Book fonts offered in reader settings (Literata, PT Serif, Golos Text).
+        if (!content.getElementById('kitapp-reader-fonts')) {
+          const fonts = content.createElement('link');
+          fonts.id = 'kitapp-reader-fonts';
+          fonts.rel = 'stylesheet';
+          fonts.href = 'https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;600&family=Literata:ital,wght@0,400;0,600;1,400&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap';
+          content.head.appendChild(fonts);
+        }
+        style.textContent = `
+          .kitapp-pagebreak { display: inline !important; width: 0 !important; height: 0 !important; }
+          mark[data-kitapp-search] { background: #ffe066 !important; color: #111 !important; border-radius: 2px; }
+          mark[data-kitapp-search-active] { background: #ff9f1c !important; outline: 2px solid #ff9f1c; }
+        `;
+        return true;
+      };
+
+      const fontStack = (name) => name === 'Golos Text'
+        ? "'Golos Text', system-ui, sans-serif"
+        : `'${name}', Georgia, serif`;
+
+      const applyNavigatorPreferences = () => {
+        const reader = window.kitappReader;
+        if (!reader?._nav || !readerPreferences) return false;
+        const values = readerPreferences;
+        reader.setEPUBPreferences(JSON.stringify({
+          fontSize: values.fontSize / 100,
+          fontFamily: fontStack(values.fontFamily),
+          lineHeight: values.lineHeight,
+          pageMargins: values.margins,
+          backgroundColor: values.background,
+          textColor: values.foreground,
+          hyphens: values.wordWrap,
+          textAlign: 'justify',
+        }));
+        return true;
+      };
+
+      // Keep a handle on the reader instance Flutter creates, to reach its navigator.
+      const captureReader = () => {
+        const proto = window.ReadiumReader?.prototype;
+        if (!proto || proto.kitappWrapped) return;
+        const open = proto.openPublication;
+        proto.openPublication = async function (...args) {
+          window.kitappReader = this;
+          const result = await open.apply(this, args);
+          if (readerPreferences) retryReaderAction(applyNavigatorPreferences);
+          return result;
+        };
+        proto.kitappWrapped = true;
+      };
+      window.addEventListener('DOMContentLoaded', captureReader);
+
+      const clearSearch = () => {
+        const content = readerDocument();
+        if (!content) return;
+        for (const mark of [...content.querySelectorAll('mark[data-kitapp-search]')]) {
+          mark.replaceWith(content.createTextNode(mark.textContent ?? ''));
+        }
+        content.body?.normalize();
+      };
+
+      const highlightSearch = () => {
+        const content = readerDocument();
+        if (!content || !readerSearch?.query) return false;
+        clearSearch();
+        const query = readerSearch.query.toLocaleLowerCase();
+        const walker = content.createTreeWalker(
+          content.body,
+          NodeFilter.SHOW_TEXT,
+          { acceptNode: (node) => node.parentElement?.closest('script, style, mark')
+            ? NodeFilter.FILTER_REJECT
+            : NodeFilter.FILTER_ACCEPT },
+        );
+        const matches = [];
+        let node;
+        while ((node = walker.nextNode())) {
+          const text = node.nodeValue ?? '';
+          let from = 0;
+          let index;
+          while ((index = text.toLocaleLowerCase().indexOf(query, from)) >= 0) {
+            matches.push({ node, index });
+            from = index + Math.max(1, query.length);
+          }
+        }
+        if (!matches.length) return false;
+        const grouped = new Map();
+        for (const match of matches) {
+          if (!grouped.has(match.node)) grouped.set(match.node, []);
+          grouped.get(match.node).push(match.index);
+        }
+        const marks = [];
+        for (const [textNode, indexes] of grouped) {
+          const text = textNode.nodeValue ?? '';
+          const fragment = content.createDocumentFragment();
+          let cursor = 0;
+          for (const index of indexes) {
+            fragment.append(text.slice(cursor, index));
+            const mark = content.createElement('mark');
+            mark.dataset.kitappSearch = 'true';
+            mark.textContent = text.slice(index, index + readerSearch.query.length);
+            fragment.append(mark);
+            marks.push(mark);
+            cursor = index + readerSearch.query.length;
+          }
+          fragment.append(text.slice(cursor));
+          textNode.replaceWith(fragment);
+        }
+        const active = marks[Math.min(readerSearch.occurrence, marks.length - 1)];
+        active?.setAttribute('data-kitapp-search-active', 'true');
+        active?.scrollIntoView({ block: 'center', inline: 'center' });
+        return true;
+      };
+
+      const retryReaderAction = (action) => {
+        let attempts = 0;
+        const run = () => {
+          if (action() || attempts++ >= 20) return;
+          window.setTimeout(run, 100);
+        };
+        run();
+      };
+
+      window.kitappApplyReaderPreferences = (json) => {
+        readerPreferences = JSON.parse(json);
+        captureReader();
+        retryReaderAction(applyNavigatorPreferences);
+        retryReaderAction(applyPreferences);
+      };
+
+      window.kitappGoToReaderFragment = (fragment) => {
+        retryReaderAction(() => {
+          const target = readerDocument()?.getElementById(fragment);
+          target?.scrollIntoView({ block: 'start', inline: 'start' });
+          return Boolean(target);
+        });
+      };
+
+      window.kitappHighlightReaderSearch = (query, occurrence) => {
+        readerSearch = { query, occurrence: Math.max(0, occurrence) };
+        retryReaderAction(highlightSearch);
+      };
+
+      window.kitappClearReaderSearch = () => {
+        readerSearch = null;
+        clearSearch();
+      };
+
+      // Jumps (chapters, the scrubber, search) sometimes leave the book scrolled
+      // part of a page, so text slides left and up. Snap back to a whole page.
+      const snapToPage = (win) => {
+        const root = win?.document?.scrollingElement;
+        const width = root?.clientWidth;
+        if (!width) return;
+        if (root.scrollTop) root.scrollTop = 0;
+        const rest = root.scrollLeft % width;
+        if (rest > 1 && width - rest > 1) {
+          root.scrollLeft = Math.round(root.scrollLeft / width) * width;
+        }
+      };
+
+      const watchPageAlignment = (frame) => {
+        const win = frame.contentWindow;
+        if (!win || win.kitappSnapWatched) return;
+        win.kitappSnapWatched = true;
+        let timer = null;
+        win.addEventListener('scroll', () => {
+          window.clearTimeout(timer);
+          timer = window.setTimeout(() => snapToPage(win), 120);
+        }, { passive: true });
+        window.setTimeout(() => snapToPage(win), 300);
+      };
+
+      const observeReaderFrame = () => {
+        for (const frame of document.querySelectorAll('#container iframe')) {
+          watchPageAlignment(frame);
+          if (frame.dataset.kitappObserved) continue;
+          frame.dataset.kitappObserved = 'true';
+          frame.addEventListener('load', () => {
+            watchPageAlignment(frame);
+            window.setTimeout(() => {
+              applyPreferences();
+              if (readerSearch) highlightSearch();
+            });
+          });
+        }
+        applyPreferences();
+      };
+      new MutationObserver(observeReaderFrame).observe(document.documentElement, {
+        childList: true,
+        subtree: true,
+      });
+      window.addEventListener('DOMContentLoaded', observeReaderFrame);
+
+      window.addEventListener('pointerdown', (event) => {
+        if (!document.querySelector('#container iframe')) return;
+        pointerStart = { x: event.clientX, y: event.clientY };
+      }, true);
+
+      window.addEventListener('pointerup', (event) => {
+        if (!pointerStart) return;
+        const dx = event.clientX - pointerStart.x;
+        const dy = event.clientY - pointerStart.y;
+        pointerStart = null;
+
+        if (Math.abs(dx) <= 50 || Math.abs(dx) <= Math.abs(dy)) return;
+        if (dx < 0) {
+          window.kitappSwipeForward?.();
+        } else {
+          window.kitappSwipeBackward?.();
+        }
+      }, true);
+    })();
+  </script>
 </head>
 <body>
   <!--

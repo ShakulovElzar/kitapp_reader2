@@ -1,0 +1,749 @@
+{
+  "@context": "https://readium.org/webpub-manifest/context.jsonld",
+  "metadata": {
+    "@type": "http://schema.org/Book",
+    "title": "Игра престолов",
+    "identifier": "urn:uuid:7ddd9d15-cd5a-4672-af1a-23bf78226f0c",
+    "language": "ru",
+    "author": [
+      {
+        "name": "Джордж Мартин"
+      }
+    ]
+  },
+  "links": [
+    {
+      "rel": "self",
+      "href": "manifest.json",
+      "type": "application/webpub+json"
+    }
+  ],
+  "readingOrder": [
+    {
+      "href": "OPS/ch1.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-1.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-2.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-3.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-4.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-5.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-6.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-7.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-8.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-9.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-10.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-11.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-12.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-13.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-14.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-15.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-16.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-17.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-18.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-19.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-20.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-21.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-22.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-23.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-24.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-25.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-26.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-27.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-28.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-29.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-30.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-31.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-32.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-33.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-34.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-35.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-36.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-37.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-38.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-39.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-40.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-41.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-42.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-43.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-44.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-45.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-46.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-47.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-48.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-49.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-50.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-51.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-52.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-53.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-54.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-55.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-56.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-57.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-58.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-59.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-60.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-61.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-62.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-63.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-64.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-65.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-66.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-67.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-68.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-69.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-70.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-71.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-72.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-73.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-74.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-75.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch1-76.xhtml",
+      "type": "application/xhtml+xml"
+    },
+    {
+      "href": "OPS/ch2.xhtml",
+      "type": "application/xhtml+xml"
+    }
+  ],
+  "resources": [
+    {
+      "href": "OPS/fonts/Times-New-Roman-400-Italic-7ddd9d15-cd5a-4672-af1a-23bf78226f0c.otf",
+      "type": "application/vnd.ms-opentype"
+    },
+    {
+      "href": "OPS/images/i_004.png",
+      "type": "image/png"
+    },
+    {
+      "href": "OPS/images/i_014.png",
+      "type": "image/png"
+    },
+    {
+      "href": "OPS/images/i_009.png",
+      "type": "image/png"
+    },
+    {
+      "href": "OPS/fonts/Times-New-Roman-400-7ddd9d15-cd5a-4672-af1a-23bf78226f0c.otf",
+      "type": "application/vnd.ms-opentype"
+    },
+    {
+      "href": "OPS/fonts/Times-New-Roman-700-7ddd9d15-cd5a-4672-af1a-23bf78226f0c.otf",
+      "type": "application/vnd.ms-opentype"
+    },
+    {
+      "href": "OPS/images/i_003.png",
+      "type": "image/png"
+    },
+    {
+      "href": "OPS/images/i_013.png",
+      "type": "image/png"
+    },
+    {
+      "href": "OPS/images/i_008.png",
+      "type": "image/png"
+    },
+    {
+      "href": "OPS/images/i_002.png",
+      "type": "image/png"
+    },
+    {
+      "href": "OPS/images/i_012.png",
+      "type": "image/png"
+    },
+    {
+      "href": "OPS/images/i_007.png",
+      "type": "image/png"
+    },
+    {
+      "href": "OPS/style.css",
+      "type": "text/css"
+    },
+    {
+      "href": "OPS/images/i_001.png",
+      "type": "image/png"
+    },
+    {
+      "href": "OPS/images/i_011.png",
+      "type": "image/png"
+    },
+    {
+      "href": "OPS/fonts/Times-New-Roman-700-Italic-7ddd9d15-cd5a-4672-af1a-23bf78226f0c.otf",
+      "type": "application/vnd.ms-opentype"
+    },
+    {
+      "href": "OPS/images/i_006.png",
+      "type": "image/png"
+    },
+    {
+      "href": "OPS/images/i_010.png",
+      "type": "image/png"
+    },
+    {
+      "href": "OPS/images/i_005.png",
+      "type": "image/png"
+    }
+  ],
+  "toc": [
+    {
+      "title": "Пролог",
+      "href": "OPS/ch1-3.xhtml#id1"
+    },
+    {
+      "title": "Бран",
+      "href": "OPS/ch1-4.xhtml#id2"
+    },
+    {
+      "title": "Кейтилин",
+      "href": "OPS/ch1-5.xhtml#id3"
+    },
+    {
+      "title": "Дейенерис",
+      "href": "OPS/ch1-6.xhtml#id4"
+    },
+    {
+      "title": "Эддард",
+      "href": "OPS/ch1-7.xhtml#id5"
+    },
+    {
+      "title": "Джон",
+      "href": "OPS/ch1-8.xhtml#id6"
+    },
+    {
+      "title": "Кейтилин",
+      "href": "OPS/ch1-9.xhtml#id7"
+    },
+    {
+      "title": "Арья",
+      "href": "OPS/ch1-10.xhtml#id8"
+    },
+    {
+      "title": "Бран",
+      "href": "OPS/ch1-11.xhtml#id9"
+    },
+    {
+      "title": "Тирион",
+      "href": "OPS/ch1-12.xhtml#id10"
+    },
+    {
+      "title": "Джон",
+      "href": "OPS/ch1-13.xhtml#id11"
+    },
+    {
+      "title": "Дейенерис",
+      "href": "OPS/ch1-14.xhtml#id12"
+    },
+    {
+      "title": "Эддард",
+      "href": "OPS/ch1-15.xhtml#id13"
+    },
+    {
+      "title": "Тирион",
+      "href": "OPS/ch1-16.xhtml#id14"
+    },
+    {
+      "title": "Кейтилин",
+      "href": "OPS/ch1-17.xhtml#id15"
+    },
+    {
+      "title": "Санса",
+      "href": "OPS/ch1-18.xhtml#id16"
+    },
+    {
+      "title": "Эддард",
+      "href": "OPS/ch1-19.xhtml#id17"
+    },
+    {
+      "title": "Бран",
+      "href": "OPS/ch1-20.xhtml#id18"
+    },
+    {
+      "title": "Кейтилин",
+      "href": "OPS/ch1-21.xhtml#id19"
+    },
+    {
+      "title": "Джон",
+      "href": "OPS/ch1-22.xhtml#id20"
+    },
+    {
+      "title": "Эддард",
+      "href": "OPS/ch1-23.xhtml#id21"
+    },
+    {
+      "title": "Тирион",
+      "href": "OPS/ch1-24.xhtml#id22"
+    },
+    {
+      "title": "Арья",
+      "href": "OPS/ch1-25.xhtml#id23"
+    },
+    {
+      "title": "Дейенерис",
+      "href": "OPS/ch1-26.xhtml#id24"
+    },
+    {
+      "title": "Бран",
+      "href": "OPS/ch1-27.xhtml#id25"
+    },
+    {
+      "title": "Эддард",
+      "href": "OPS/ch1-28.xhtml#id26"
+    },
+    {
+      "title": "Джон",
+      "href": "OPS/ch1-29.xhtml#id27"
+    },
+    {
+      "title": "Эддард",
+      "href": "OPS/ch1-30.xhtml#id28"
+    },
+    {
+      "title": "Кейтилин",
+      "href": "OPS/ch1-31.xhtml#id29"
+    },
+    {
+      "title": "Санса",
+      "href": "OPS/ch1-32.xhtml#id30"
+    },
+    {
+      "title": "Эддард",
+      "href": "OPS/ch1-33.xhtml#id31"
+    },
+    {
+      "title": "Тирион",
+      "href": "OPS/ch1-34.xhtml#id32"
+    },
+    {
+      "title": "Арья",
+      "href": "OPS/ch1-35.xhtml#id33"
+    },
+    {
+      "title": "Эддард",
+      "href": "OPS/ch1-36.xhtml#id34"
+    },
+    {
+      "title": "Кейтилин",
+      "href": "OPS/ch1-37.xhtml#id35"
+    },
+    {
+      "title": "Эддард",
+      "href": "OPS/ch1-38.xhtml#id36"
+    },
+    {
+      "title": "Дейенерис",
+      "href": "OPS/ch1-39.xhtml#id37"
+    },
+    {
+      "title": "Бран",
+      "href": "OPS/ch1-40.xhtml#id38"
+    },
+    {
+      "title": "Тирион",
+      "href": "OPS/ch1-41.xhtml#id39"
+    },
+    {
+      "title": "Эддард",
+      "href": "OPS/ch1-42.xhtml#id40"
+    },
+    {
+      "title": "Кейтилин",
+      "href": "OPS/ch1-43.xhtml#id41"
+    },
+    {
+      "title": "Джон",
+      "href": "OPS/ch1-44.xhtml#id42"
+    },
+    {
+      "title": "Тирион",
+      "href": "OPS/ch1-45.xhtml#id43"
+    },
+    {
+      "title": "Эддард",
+      "href": "OPS/ch1-46.xhtml#id44"
+    },
+    {
+      "title": "Санса",
+      "href": "OPS/ch1-47.xhtml#id45"
+    },
+    {
+      "title": "Эддард",
+      "href": "OPS/ch1-48.xhtml#id46"
+    },
+    {
+      "title": "Дейенерис",
+      "href": "OPS/ch1-49.xhtml#id47"
+    },
+    {
+      "title": "Эддард",
+      "href": "OPS/ch1-50.xhtml#id48"
+    },
+    {
+      "title": "Джон",
+      "href": "OPS/ch1-51.xhtml#id49"
+    },
+    {
+      "title": "Эддард",
+      "href": "OPS/ch1-52.xhtml#id50"
+    },
+    {
+      "title": "Арья",
+      "href": "OPS/ch1-53.xhtml#id51"
+    },
+    {
+      "title": "Санса",
+      "href": "OPS/ch1-54.xhtml#id52"
+    },
+    {
+      "title": "Джон",
+      "href": "OPS/ch1-55.xhtml#id53"
+    },
+    {
+      "title": "Бран",
+      "href": "OPS/ch1-56.xhtml#id54"
+    },
+    {
+      "title": "Дейенерис",
+      "href": "OPS/ch1-57.xhtml#id55"
+    },
+    {
+      "title": "Кейтилин",
+      "href": "OPS/ch1-58.xhtml#id56"
+    },
+    {
+      "title": "Тирион",
+      "href": "OPS/ch1-59.xhtml#id57"
+    },
+    {
+      "title": "Санса",
+      "href": "OPS/ch1-60.xhtml#id58"
+    },
+    {
+      "title": "Эддард",
+      "href": "OPS/ch1-61.xhtml#id59"
+    },
+    {
+      "title": "Кейтилин",
+      "href": "OPS/ch1-62.xhtml#id60"
+    },
+    {
+      "title": "Джон",
+      "href": "OPS/ch1-63.xhtml#id61"
+    },
+    {
+      "title": "Дейенерис",
+      "href": "OPS/ch1-64.xhtml#id62"
+    },
+    {
+      "title": "Тирион",
+      "href": "OPS/ch1-65.xhtml#id63"
+    },
+    {
+      "title": "Кейтилин",
+      "href": "OPS/ch1-66.xhtml#id64"
+    },
+    {
+      "title": "Дейенерис",
+      "href": "OPS/ch1-67.xhtml#id65"
+    },
+    {
+      "title": "Арья",
+      "href": "OPS/ch1-68.xhtml#id66"
+    },
+    {
+      "title": "Бран",
+      "href": "OPS/ch1-69.xhtml#id67"
+    },
+    {
+      "title": "Санса",
+      "href": "OPS/ch1-70.xhtml#id68"
+    },
+    {
+      "title": "Дейенерис",
+      "href": "OPS/ch1-71.xhtml#id69"
+    },
+    {
+      "title": "Тирион",
+      "href": "OPS/ch1-72.xhtml#id70"
+    },
+    {
+      "title": "Джон",
+      "href": "OPS/ch1-73.xhtml#id71"
+    },
+    {
+      "title": "Кейтилин",
+      "href": "OPS/ch1-74.xhtml#id72"
+    },
+    {
+      "title": "Дейенерис",
+      "href": "OPS/ch1-75.xhtml#id73"
+    },
+    {
+      "title": "Приложение",
+      "href": "OPS/ch1-76.xhtml#id74",
+      "children": [
+        {
+          "title": "Дом Баратеонов",
+          "href": "OPS/ch1-76.xhtml#id75"
+        },
+        {
+          "title": "Дом Старков",
+          "href": "OPS/ch1-76.xhtml#id76"
+        },
+        {
+          "title": "Дом Ланнистеров",
+          "href": "OPS/ch1-76.xhtml#id77"
+        },
+        {
+          "title": "Дом Арренов",
+          "href": "OPS/ch1-76.xhtml#id78"
+        },
+        {
+          "title": "Дом Талли",
+          "href": "OPS/ch1-76.xhtml#id79"
+        },
+        {
+          "title": "Дом Тиреллов",
+          "href": "OPS/ch1-76.xhtml#id80"
+        },
+        {
+          "title": "Род Грейджоев",
+          "href": "OPS/ch1-76.xhtml#id81"
+        },
+        {
+          "title": "Дом Мартеллов",
+          "href": "OPS/ch1-76.xhtml#id82"
+        },
+        {
+          "title": "Старая династия Дом Таргариенов",
+          "href": "OPS/ch1-76.xhtml#id83"
+        }
+      ]
+    }
+  ]
+}

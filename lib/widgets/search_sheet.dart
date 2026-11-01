@@ -1,705 +1,322 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flureadium/flureadium.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/material.dart';
+import 'package:html/parser.dart' as html_parser;
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
-class SearchSheet
-    extends StatefulWidget {
+import '../state/app_state.dart';
+import '../theme/reader_palette.dart';
+import 'contents_sheet.dart';
 
-    final Publication
-        publication;
-
-    final Function(
-    Locator locator,
-    )
-        onBookmarkTap;
-
-    const SearchSheet({
+class SearchSheet extends StatefulWidget {
+  const SearchSheet({
     super.key,
-    required
-        this.publication,
-    required
-        this.onBookmarkTap,
-    });
+    required this.bookId,
+    required this.manifestUrl,
+    required this.publication,
+    required this.onResultTap,
+  });
+
+  final String bookId;
+  final String manifestUrl;
+  final Publication publication;
+  final void Function(Locator locator, String query, int occurrence)
+  onResultTap;
 
   @override
-  State<SearchSheet>
-      createState() =>
-          _SearchSheetState();
+  State<SearchSheet> createState() => _SearchSheetState();
 }
 
-class _SearchSheetState
-    extends State<
-        SearchSheet> {
+class _SearchSheetState extends State<SearchSheet> {
+  final _controller = TextEditingController();
+  final _focusNode = FocusNode();
+  final Map<String, String> _chapterText = {};
+  List<String> _recent = const [];
+  List<_SearchResult> _results = const [];
+  Timer? _debounce;
+  bool _isSearching = false;
+  int _searchGeneration = 0;
 
-  String _search =
-      '';
+  String get _recentKey => AppStateScope.read(
+    context,
+  ).api.userKey('reader_searches_${widget.bookId}');
 
-  final List<String>
-      _recentSearches = [
-    'бран',
-    'дейенерис',
-    'джон',
-    'красный замок',
-    ];
+  @override
+  void initState() {
+    super.initState();
+    _loadRecent();
+  }
 
+  Future<void> _loadRecent() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() => _recent = prefs.getStringList(_recentKey) ?? []);
+    }
+  }
 
-    final Flureadium
-        _flureadium =
-        Flureadium();
+  Future<void> _saveRecent(String query) async {
+    final updated = [
+      query,
+      ..._recent.where((item) => item != query),
+    ].take(10).toList();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_recentKey, updated);
+    if (mounted) setState(() => _recent = updated);
+  }
 
-    bool
-        _isSearching =
-        false;
+  void _queueSearch(String value) {
+    _debounce?.cancel();
+    final query = value.trim();
+    if (query.isEmpty) {
+      setState(() => _results = const []);
+      return;
+    }
+    _debounce = Timer(const Duration(milliseconds: 250), () => _search(query));
+  }
 
-    List<Map<String,
-        dynamic>>
-        _results =
-        [];
-
-@override
-Widget build(
-  BuildContext context,
-) {
-
-  return Container(
-    decoration:
-        const BoxDecoration(
-      color: Color(
-        0xFFF6F2EC,
-      ),
-      borderRadius:
-          BorderRadius.vertical(
-        top: Radius.circular(
-          28,
-        ),
-      ),
-    ),
-
-    child:
-        MediaQuery.removePadding(
-      context: context,
-      removeTop: true,
-
-      child: SafeArea(
-        top: false,
-        bottom: false,
-
-        child: Column(
-          children: [
-
-            const SizedBox(
-              height: 6,
+  Future<void> _search(String query) async {
+    final generation = ++_searchGeneration;
+    setState(() => _isSearching = true);
+    final normalized = query.toLowerCase();
+    final results = <_SearchResult>[];
+    try {
+      for (
+        var index = 0;
+        index < widget.publication.readingOrder.length;
+        index++
+      ) {
+        final link = widget.publication.readingOrder[index];
+        var text = _chapterText[link.href];
+        if (text == null) {
+          final uri = Uri.parse(widget.manifestUrl).resolve(link.href);
+          final response = await http.get(uri);
+          if (response.statusCode != 200) continue;
+          text =
+              html_parser
+                  // EPUB XHTML is UTF-8; the server sends no charset, so decode explicitly.
+                  .parse(utf8.decode(response.bodyBytes, allowMalformed: true))
+                  .body
+                  ?.text
+                  .replaceAll(RegExp(r'\s+'), ' ')
+                  .trim() ??
+              '';
+          _chapterText[link.href] = text;
+        }
+        var match = text.toLowerCase().indexOf(normalized);
+        var occurrence = 0;
+        while (match >= 0 && results.length < 100) {
+          final start = (match - 55).clamp(0, text.length);
+          final end = (match + query.length + 95).clamp(0, text.length);
+          final locator = Locator(
+            href: link.href,
+            type: link.type ?? 'application/xhtml+xml',
+            title: link.title,
+            locations: Locations(
+              progression: text.isEmpty ? 0 : match / text.length,
             ),
+          );
+          results.add(
+            _SearchResult(
+              snippet:
+                  '${start > 0 ? '…' : ''}${text.substring(start, end)}${end < text.length ? '…' : ''}',
+              chapter: link.title ?? '${index + 1}-бөлүм',
+              locator: locator,
+              query: query,
+              occurrence: occurrence,
+            ),
+          );
+          occurrence++;
+          match = text.toLowerCase().indexOf(
+            normalized,
+            match + normalized.length,
+          );
+        }
+        if (results.length >= 50) break;
+      }
+      await _saveRecent(query);
+      if (!mounted || generation != _searchGeneration) return;
+      setState(() => _results = results);
+    } finally {
+      if (mounted && generation == _searchGeneration) {
+        setState(() => _isSearching = false);
+      }
+    }
+  }
 
-            // handle
-            Container(
-              width: 42,
-              height: 4,
-              decoration:
-                  BoxDecoration(
-                color:
-                    const Color(
-                  0xFFD7CABB,
-                ),
-                borderRadius:
-                    BorderRadius.circular(
-                  10,
-                ),
+  void _runRecent(String query) {
+    _controller.text = query;
+    _controller.selection = TextSelection.collapsed(offset: query.length);
+    _search(query);
+  }
+
+  Future<void> _clearRecent() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_recentKey);
+    if (mounted) setState(() => _recent = const []);
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ReaderListScaffold(
+      title: 'Китептен издөө',
+      child: Column(
+        children: [
+          const SizedBox(height: 14),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            child: TextField(
+              controller: _controller,
+              focusNode: _focusNode,
+              autofocus: true,
+              onChanged: _queueSearch,
+              onSubmitted: _search,
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.search),
+                hintText: 'Китептин текстинен издөө...',
               ),
             ),
-
-            const SizedBox(
-              height: 8,
-            ),
-
-            // header
-            SizedBox(
-              height: 50,
-              child: Row(
-                children: [
-
-                  IconButton(
-                    onPressed: () async {
-
-                    FocusScope.of(
-                        context,
-                    ).unfocus();
-
-                    await Future.delayed(
-                        const Duration(
-                        milliseconds: 120,
-                        ),
-                    );
-
-                    await SystemChrome
-                        .setEnabledSystemUIMode(
-                        SystemUiMode
-                            .immersiveSticky,
-                    );
-
-                    if (!mounted) {
-                        return;
-                    }
-
-                    Navigator.pop(
-                        context,
-                    );
-                    },
-                    icon:
-                        const Icon(
-                      Icons
-                          .arrow_back_ios_new,
-                      color:
-                          Color(
-                        0xFF4A4035,
-                      ),
-                      size: 20,
-                    ),
-                  ),
-
-                  const Expanded(
-                    child: Center(
-                      child: Text(
-                        'Издөө',
-                        style:
-                            TextStyle(
-                          fontSize:
-                              16,
-                          fontWeight:
-                              FontWeight
-                                  .w600,
-                          color:
-                              Color(
-                            0xFF4A4035,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(
-                    width: 48,
-                  ),
-                ],
-              ),
-            ),
-
-            // search
+          ),
+          if (_controller.text.isEmpty && _recent.isNotEmpty)
             Padding(
-              padding:
-                  const EdgeInsets.symmetric(
-                horizontal: 18,
-              ),
-              child: Container(
-                height: 36,
-                decoration:
-                    BoxDecoration(
-                  color:
-                      const Color(
-                    0xFFF1ECE6,
-                  ),
-                  borderRadius:
-                      BorderRadius.circular(
-                    14,
-                  ),
-                ),
-                child: TextField(
-
-                        focusNode:
-                            FocusNode()
-                            ..addListener(() {
-
-                                Future.delayed(
-                                const Duration(
-                                    milliseconds: 120,
-                                ),
-                                () {
-
-                                    SystemChrome
-                                        .setEnabledSystemUIMode(
-                                    SystemUiMode
-                                        .immersiveSticky,
-                                    );
-                                },
-                                );
-                            }),
-
-                  textAlignVertical:
-                      TextAlignVertical
-                          .center,
-                    onChanged:
-                        (value) async {
-
-                    setState(() {
-                        _search =
-                            value;
-                    });
-
-                    if (value.trim()
-                        .isEmpty) {
-
-                        setState(() {
-                        _results =
-                            [];
-                        });
-
-                        return;
-                    }
-
-                    await _searchBook(
-                        value,
-                    );
-                    },
-                  decoration:
-                      const InputDecoration(
-                    isDense:
-                        true,
-                    border:
-                        InputBorder
-                            .none,
-                    hintText:
-                        'Китептен издөө...',
-                    hintStyle:
-                        TextStyle(
-                      fontSize:
-                          13,
-                      color:
-                          Color(
-                        0xFF9A9085,
-                      ),
-                    ),
-                    prefixIcon:
-                        Icon(
-                      Icons.search,
-                      size: 20,
-                      color:
-                          Color(
-                        0xFF9A9085,
-                      ),
-                    ),
-                    contentPadding:
-                        EdgeInsets.symmetric(
-                      vertical:
-                          10,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-            const SizedBox(
-              height: 8,
-            ),
-                        if (_search.isEmpty)
-              Padding(
-                padding:
-                    const EdgeInsets.fromLTRB(
-                  4,
-                  0,
-                  15,
-                  4,
-                ),
-                child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment
-                          .start,
+              padding: const EdgeInsets.all(18),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
-
-                    const Text(
-                      'Акыркы издөөлөр',
-                      style:
-                          TextStyle(
-                        fontSize:
-                            14,
-                        fontWeight:
-                            FontWeight
-                                .w500,
-                        color:
-                            Color(
-                          0xFF4A4035,
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'Акыркы издөөлөр',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        IconButton(
+                          tooltip: 'Издөө тарыхын тазалоо',
+                          onPressed: _clearRecent,
+                          icon: const Icon(Icons.delete_outline, size: 18),
+                        ),
+                      ],
+                    ),
+                    ..._recent.map(
+                      (item) => Semantics(
+                        button: true,
+                        label: 'Акыркы издөө: $item',
+                        child: ActionChip(
+                          label: Text(item),
+                          onPressed: () => _runRecent(item),
                         ),
                       ),
-                    ),
-
-                    const SizedBox(
-                      height: 12,
-                    ),
-
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children:
-                          _recentSearches
-                              .map(
-                        (item) {
-
-                          return GestureDetector(
-                            onTap:
-                                () {
-
-                              setState(() {
-                                _search =
-                                    item;
-                              });
-                            },
-                            child:
-                                Container(
-                              padding:
-                                  const EdgeInsets.symmetric(
-                                horizontal:
-                                    8,
-                                vertical:
-                                    5,
-                              ),
-                              decoration:
-                                  BoxDecoration(
-                                color:
-                                    const Color(
-                                  0xFFF1ECE6,
-                                ),
-                                borderRadius:
-                                    BorderRadius.circular(
-                                  16,
-                                ),
-                                border:
-                                    Border.all(
-                                  color:
-                                      const Color(
-                                    0xFFE7DCCF,
-                                  ),
-                                ),
-                              ),
-                              child:
-                                  Text(
-                                item,
-                                style:
-                                    const TextStyle(
-                                  fontSize:
-                                      12,
-                                  color:
-                                      Color(
-                                    0xFF4A4035,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            
-                          );
-                        },
-                      ).toList(),
                     ),
                   ],
                 ),
               ),
-
-            Expanded(
-              child:
-                  _search.isEmpty
-                      ? _buildEmpty()
-                      : Column(
-                          children: [
-
-                            Padding(
-                              padding:
-                                  const EdgeInsets.fromLTRB(
-                                18,
-                                2,
-                                18,
-                                8,
-                              ),
-                              child: Align(
-                                alignment:
-                                    Alignment
-                                        .centerLeft,
-                                child: Text(
-                                  'Натыйжалар: ${_results.length}',
-                                  style:
-                                      const TextStyle(
-                                    fontSize:
-                                        12,
-                                    fontWeight:
-                                        FontWeight
-                                            .w500,
-                                    color:
-                                        Color(
-                                      0xFF8D847A,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-
-                            Expanded(
-                              child:
-                                  ListView.builder(
-                                padding:
-                                    const EdgeInsets.fromLTRB(
-                                  18,
-                                  0,
-                                  18,
-                                  20,
-                                ),
-                                itemCount:
-                                    _results.length,
-                                itemBuilder:
-                                    (
-                                  context,
-                                  index,
-                                ) {
-
-                                  final item =
-                                        _results[
-                                          index];
-
-                                  return Container(
-                                    margin:
-                                        const EdgeInsets.only(
-                                      bottom: 0,
-                                    ),
-                                    decoration:
-                                        BoxDecoration(
-                                      color:
-                                          const Color(
-                                        0xFFF9F6F2,
-                                      ),
-                                      borderRadius:
-                                          BorderRadius.circular(
-                                        22,
-                                      ),
-                                      border:
-                                          Border.all(
-                                        color:
-                                            const Color(
-                                          0xFFE9DED1,
-                                        ),
-                                        width:
-                                            0.8,
-                                      ),
-                                    ),
-                                    child:
-                                        Material(
-                                      color:
-                                          Colors.transparent,
-                                      child:
-                                          InkWell(
-                                        borderRadius:
-                                            BorderRadius.circular(
-                                          22,
-                                        ),
-                                        onTap: () {
-
-                                        final locator =
-                                            item['locator']
-                                                as Locator?;
-
-                                        if (locator ==
-                                            null) {
-                                            return;
-                                        }
-
-                                        widget
-                                            .onBookmarkTap(
-                                            locator,
-                                        );
-
-                                        FocusScope.of(
-                                        context,
-                                        ).unfocus();
-
-                                        SystemChrome
-                                            .setEnabledSystemUIMode(
-                                        SystemUiMode
-                                            .immersiveSticky,
-                                        );
-
-                                        Navigator.pop(
-                                            context,
-                                        );
-                                        },
-
-                                        child:
-                                            Padding(
-                                          padding:
-                                              const EdgeInsets.fromLTRB(
-                                            18,
-                                            16,
-                                            18,
-                                            16,
-                                          ),
-                                          child:
-                                              Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment
-                                                    .start,
-                                            children: [
-
-                                              Text(
-                                                item[
-                                                    'text'],
-                                                maxLines:
-                                                    3,
-                                                overflow:
-                                                    TextOverflow
-                                                        .ellipsis,
-                                                style:
-                                                    const TextStyle(
-                                                  fontSize:
-                                                      14,
-                                                  fontWeight:
-                                                      FontWeight
-                                                          .w500,
-                                                  color:
-                                                      Color(
-                                                    0xFF2F2923,
-                                                  ),
-                                                  height:
-                                                      1.4,
-                                                ),
-                                              ),
-
-                                              const SizedBox(
-                                                height:
-                                                    10,
-                                              ),
-
-                                              Text(
-                                                '${item['page']}-бет',
-                                                style:
-                                                    const TextStyle(
-                                                  fontSize:
-                                                      12,
-                                                  color:
-                                                      Color(
-                                                    0xFF8D847A,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                ),
-            ],
             ),
-        ),
+          if (_isSearching) const LinearProgressIndicator(minHeight: 2),
+          Expanded(
+            child: _controller.text.isEmpty
+                ? const SizedBox.shrink()
+                : _results.isEmpty && !_isSearching
+                ? const Center(child: Text('Натыйжа табылган жок'))
+                : ListView.separated(
+                    padding: const EdgeInsets.all(18),
+                    itemCount: _results.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 8),
+                    itemBuilder: (context, index) {
+                      final result = _results[index];
+                      return Material(
+                        color: Colors.transparent,
+                        child: ListTile(
+                          tileColor: ReaderPalette.card,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          title: _HighlightedSnippet(
+                            text: result.snippet,
+                            query: result.query,
+                          ),
+                          subtitle: Text(
+                            result.chapter,
+                            style: const TextStyle(color: ReaderPalette.muted),
+                          ),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () {
+                            widget.onResultTap(
+                              result.locator,
+                              result.query,
+                              result.occurrence,
+                            );
+                            Navigator.pop(context);
+                          },
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
       ),
     );
   }
+}
 
-    Future<void>
-        _searchBook(
-    String query,
-    ) async {
+class _SearchResult {
+  const _SearchResult({
+    required this.snippet,
+    required this.chapter,
+    required this.locator,
+    required this.query,
+    required this.occurrence,
+  });
 
-    if (_isSearching) {
-        return;
+  final String snippet;
+  final String chapter;
+  final Locator locator;
+  final String query;
+  final int occurrence;
+}
+
+class _HighlightedSnippet extends StatelessWidget {
+  const _HighlightedSnippet({required this.text, required this.query});
+
+  final String text;
+  final String query;
+
+  @override
+  Widget build(BuildContext context) {
+    final index = text.toLowerCase().indexOf(query.toLowerCase());
+    if (index < 0) {
+      return Text(text, maxLines: 4, overflow: TextOverflow.ellipsis);
     }
-
-    _isSearching =
-        true;
-
-    try {
-
-        debugPrint(
-        'READING ORDER COUNT: '
-        '${widget.publication.readingOrder.length}',
-        );
-
-        final results =
-            <Map<String,
-                dynamic>>[];
-
-        for (final link
-            in widget
-                .publication
-                .readingOrder) {
-
-        debugPrint(
-            'LINK → '
-            '${link.title} '
-            '${link.href}',
-        );
-
-        try {
-
-            final locator =
-                widget
-                    .publication
-                    .locatorFromLink(
-                link,
-                );
-
-            debugPrint(
-            'LOCATOR → '
-            '${locator?.json}',
-            );
-
-            if (locator ==
-                null) {
-            continue;
-            }
-
-            final href =
-                (link.href ??
-                        '')
-                    .toLowerCase();
-
-            if (href.contains(
-            query
-                .toLowerCase(),
-            )) {
-
-            results.add({
-                'text':
-                    link.href ??
-                        'Бөлүм',
-                'page':
-                    locator
-                            .locations
-                            ?.position ??
-                        0,
-                'locator':
-                    locator,
-            });
-            }
-
-        } catch (e) {
-
-            debugPrint(
-            'SEARCH ERROR → $e',
-            );
-        }
-        }
-
-        if (!mounted) {
-        return;
-        }
-
-        setState(() {
-        _results =
-            results;
-        });
-
-    } finally {
-
-        _isSearching =
-            false;
-    }
-    }
-
-  Widget _buildEmpty() {
-
-    return const Center(
-      child: Text(
-        '',
+    final end = index + query.length;
+    return Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(text: text.substring(0, index)),
+          TextSpan(
+            text: text.substring(index, end),
+            style: const TextStyle(
+              backgroundColor: Color(0xFFFFE066),
+              color: Color(0xFF111111),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          TextSpan(text: text.substring(end)),
+        ],
       ),
+      maxLines: 4,
+      overflow: TextOverflow.ellipsis,
     );
   }
 }

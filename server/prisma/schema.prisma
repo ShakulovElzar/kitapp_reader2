@@ -1,0 +1,205 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AdminRole {
+  SUPERADMIN
+  EDITOR
+}
+
+enum BookStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum AccessType {
+  FREE
+  PURCHASE
+  RENTAL
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  REFUNDED
+  CANCELLED
+}
+
+model Admin {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  passwordHash String
+  name         String
+  role         AdminRole  @default(EDITOR)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  auditLogs    AuditLog[]
+}
+
+model Reader {
+  id        String     @id @default(cuid())
+  phone     String     @unique
+  name      String?
+  isBlocked Boolean    @default(false)
+  blockNote String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  deletedAt DateTime?
+  purchases Purchase[]
+  rentals   Rental[]
+  otpCodes  OtpCode[]
+  readingProgress ReadingProgress[]
+  libraryEntries  LibraryEntry[]
+}
+
+model OtpCode {
+  id        String   @id @default(cuid())
+  readerId  String?
+  reader    Reader?  @relation(fields: [readerId], references: [id])
+  phone     String
+  codeHash  String
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([phone, createdAt])
+}
+
+model Author {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  bio       String?
+  photoKey  String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  books     Book[]
+}
+
+model Category {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  slug      String    @unique
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  books     Book[]
+}
+
+model Book {
+  id          String      @id @default(cuid())
+  slug        String      @unique
+  title       String
+  description String
+  price       Decimal     @db.Decimal(10, 2)
+  rentalPrice Decimal?    @db.Decimal(10, 2)
+  rentalDays  Int         @default(14)
+  pages       Int
+  rating      Float       @default(0)
+  isAdult     Boolean     @default(false)
+  isNew       Boolean     @default(false)
+  accessType  AccessType  @default(PURCHASE)
+  status      BookStatus  @default(DRAFT)
+  coverKey    String?
+  epubKey     String?
+  authorId    String
+  author      Author      @relation(fields: [authorId], references: [id])
+  categoryId  String
+  category    Category    @relation(fields: [categoryId], references: [id])
+  publishedAt DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  deletedAt   DateTime?
+  purchases   Purchase[]
+  rentals     Rental[]
+  readingProgress ReadingProgress[]
+  libraryEntries  LibraryEntry[]
+
+  @@index([status, deletedAt])
+  @@index([authorId])
+  @@index([categoryId])
+}
+
+model Purchase {
+  id         String        @id @default(cuid())
+  readerId   String
+  reader     Reader        @relation(fields: [readerId], references: [id])
+  bookId     String
+  book       Book          @relation(fields: [bookId], references: [id])
+  amount     Decimal       @db.Decimal(10, 2)
+  currency   String        @default("KGS")
+  status     PaymentStatus @default(COMPLETED)
+  provider   String        @default("LOCAL")
+  reference  String?       @unique
+  createdAt  DateTime      @default(now())
+  refundedAt DateTime?
+
+  @@index([createdAt, status])
+  @@index([bookId])
+}
+
+model Rental {
+  id        String        @id @default(cuid())
+  readerId  String
+  reader    Reader        @relation(fields: [readerId], references: [id])
+  bookId    String
+  book      Book          @relation(fields: [bookId], references: [id])
+  amount    Decimal       @db.Decimal(10, 2)
+  currency  String        @default("KGS")
+  status    PaymentStatus @default(COMPLETED)
+  startsAt  DateTime      @default(now())
+  endsAt    DateTime
+  createdAt DateTime      @default(now())
+
+  @@index([createdAt, status])
+  @@index([bookId])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  adminId   String
+  admin     Admin    @relation(fields: [adminId], references: [id])
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model ReadingProgress {
+  id            String   @id @default(cuid())
+  readerId      String
+  reader        Reader   @relation(fields: [readerId], references: [id])
+  bookId        String
+  book          Book     @relation(fields: [bookId], references: [id])
+  locator       Json?
+  progression   Float    @default(0)
+  activeSeconds Int      @default(0)
+  lastReadAt    DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([readerId, bookId])
+  @@index([readerId, lastReadAt])
+}
+
+/// A free book the reader added to "My books" or opened.
+model LibraryEntry {
+  id        String   @id @default(cuid())
+  readerId  String
+  reader    Reader   @relation(fields: [readerId], references: [id])
+  bookId    String
+  book      Book     @relation(fields: [bookId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([readerId, bookId])
+}

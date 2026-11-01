@@ -43,3 +43,15 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Node / local services
+node_modules/
+server/dist/
+server/src/generated/prisma/
+server/storage/
+server/storage-test/
+admin/dist/
+.env
+server/.env
+admin/.env
+*.tsbuildinfo
